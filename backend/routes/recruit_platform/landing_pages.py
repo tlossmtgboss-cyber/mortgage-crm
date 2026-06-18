@@ -1,270 +1,518 @@
 """
-Recruiting platform landing page routes.
+Recruit Platform — Landing Pages (Website Builder)
 
-router       — authenticated CRUD (create, edit, publish, preview)
-public_router — serve rendered HTML + track views
+Authenticated endpoints (admin, prefix /api/v1/recruit-platform/landing-pages):
+  GET    /                           list pages for org
+  POST   /                           create page
+  GET    /{page_id}                  get single page
+  PUT    /{page_id}                  update page
+  DELETE /{page_id}                  delete page
+  POST   /{page_id}/publish          publish page
+  POST   /{page_id}/unpublish        unpublish page
+  GET    /{page_id}/preview          render HTML preview
+
+Public endpoints (no auth, prefix /api/v1/recruit-platform):
+  GET    /p/{slug}                   serve published landing page HTML
+  POST   /public/apply/{org_slug}    receive lead application from form
+  POST   /public/schedule/{org_slug} receive calendar slot booking
 """
+
 import logging
 import os
-import json
-from typing import Optional, Any
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Response
-from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from database import get_db
+from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/recruit-platform/landing-pages")
-public_router = APIRouter(prefix="/api/v1/recruit-platform")
+TEMPLATE_PATH = Path(__file__).resolve().parent.parent.parent / "templates" / "recruit_landing_page.html"
 
-# ── Lazy deps ──────────────────────────────────────────────────────────────────
-def _get_db():
-    from database import get_db
-    return next(get_db())
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.perenniaai.com")
 
-def _get_cu():
-    from auth.dependencies import get_current_user
-    return get_current_user
+# ---------------------------------------------------------------------------
+# Routers
+# ---------------------------------------------------------------------------
 
-# ── Template loading ───────────────────────────────────────────────────────────
-_TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'templates', 'recruit_landing_page.html')
-_TEMPLATE_CACHE: Optional[str] = None
+landing_pages_router = APIRouter(
+    prefix="/api/v1/recruit-platform/landing-pages",
+    tags=["recruit-landing-pages"],
+)
 
-def _load_template() -> str:
-    global _TEMPLATE_CACHE
-    if _TEMPLATE_CACHE is None:
-        try:
-            with open(_TEMPLATE_PATH, 'r', encoding='utf-8') as f:
-                _TEMPLATE_CACHE = f.read()
-        except FileNotFoundError:
-            logger.error("Landing page template not found at %s", _TEMPLATE_PATH)
-            raise HTTPException(status_code=500, detail="Template not configured")
-    return _TEMPLATE_CACHE
+landing_pages_public_router = APIRouter(
+    prefix="/api/v1/recruit-platform",
+    tags=["recruit-landing-pages-public"],
+)
 
-def _render_template(config: dict, org_slug: str, page_slug: str) -> str:
-    html = _load_template()
-    api_base = os.environ.get('API_BASE_URL', 'https://api.perenniaai.com')
-    subs = {
-        '{{PAGE_TITLE}}': config.get('page_title', 'Careers — Apply Now'),
-        '{{PRIMARY_COLOR}}': config.get('primary_color', '#6AAA26'),
-        '{{PRIMARY_COLOR_DARK}}': config.get('primary_color_dark', '#578F1E'),
-        '{{PRIMARY_COLOR_PALE}}': config.get('primary_color_pale', '#EFF7E1'),
-        '{{LOCATION_DISPLAY}}': config.get('location_display', ''),
-        '{{HERO_HEADLINE}}': config.get('hero_headline', 'Join Our Team'),
-        '{{HERO_SUBHEADLINE}}': config.get('hero_subheadline', ''),
-        '{{SIGNING_BONUS}}': config.get('signing_bonus', '$2,500'),
-        '{{SIGNING_BONUS_MONTH}}': config.get('signing_bonus_month', 'this month'),
-        '{{SIGNING_BONUS_DEADLINE}}': config.get('signing_bonus_deadline', 'this month'),
-        '{{YEAR1_RANGE}}': config.get('year1_range', '$65–90K'),
-        '{{YEAR2_TOP}}': config.get('year2_top', '$120,000+'),
-        '{{SENIOR_LO}}': config.get('senior_lo', '$180,000+'),
-        '{{TEAM_LEAD}}': config.get('team_lead', '$250,000+'),
-        '{{STAT_1_NUM}}': config.get('stat_1_num', '2,400+'),
-        '{{STAT_1_LABEL}}': config.get('stat_1_label', 'Loans closed last year'),
-        '{{STAT_2_NUM}}': config.get('stat_2_num', '94%'),
-        '{{STAT_2_LABEL}}': config.get('stat_2_label', 'Employees promoted within 18 months'),
-        '{{STAT_3_NUM}}': config.get('stat_3_num', '4.97 ★'),
-        '{{STAT_3_LABEL}}': config.get('stat_3_label', 'Team borrower rating'),
-        '{{STAT_4_NUM}}': config.get('stat_4_num', '8 Weeks'),
-        '{{STAT_4_LABEL}}': config.get('stat_4_label', 'Fully paid training program'),
-        '{{MANAGER_INITIALS}}': config.get('manager_initials', ''),
-        '{{MANAGER_NAME}}': config.get('manager_name', ''),
-        '{{MANAGER_TITLE}}': config.get('manager_title', ''),
-        '{{MANAGER_NMLS}}': config.get('manager_nmls', ''),
-        '{{CONTACT_PHONE_DISPLAY}}': config.get('contact_phone_display', ''),
-        '{{CONTACT_PHONE_TEL}}': config.get('contact_phone_tel', ''),
-        '{{COMPANY_NAME}}': config.get('company_name', ''),
-        '{{BRANCH_ADDRESS}}': config.get('branch_address', ''),
-        '{{BRANCH_NMLS}}': config.get('branch_nmls', ''),
-        '{{API_BASE_URL}}': api_base,
-        '{{ORG_SLUG}}': org_slug,
-        '{{PAGE_SLUG}}': page_slug,
-        '{{BASE_HREF}}': '/',
-    }
-    for placeholder, value in subs.items():
-        html = html.replace(placeholder, str(value))
-    return html
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
 
-# ── Pydantic models ────────────────────────────────────────────────────────────
+class LandingPageConfig(BaseModel):
+    primary_color: str = "#6AAA26"
+    primary_color_dark: str = "#578F1E"
+    primary_color_pale: str = "#EFF7E1"
+    company_name: str = ""
+    company_nmls_id: str = ""
+    location_display: str = ""
+    hero_headline: str = "Build a six-figure mortgage career from day one."
+    hero_headline_plain: str = "Build a six-figure mortgage career from day one."
+    signing_bonus: str = "$2,500 signing bonus for July hires"
+    signing_bonus_amount: str = "$2,500"
+    year1_range: str = "$65–90K"
+    year2_top: str = "$120,000+"
+    senior_lo: str = "$180,000+"
+    team_lead: str = "$250,000+"
+    stat_1_num: str = "2,400+"
+    stat_1_label: str = "Loans closed last year"
+    stat_2_num: str = "94%"
+    stat_2_label: str = "Employees promoted within 18 months"
+    stat_3_num: str = "4.97 ★"
+    stat_3_label: str = "Team borrower rating"
+    stat_4_num: str = "8 Weeks"
+    stat_4_label: str = "Fully paid training program"
+    manager_name: str = ""
+    manager_initials: str = ""
+    manager_title: str = "Branch Manager"
+    manager_nmls: str = ""
+    contact_phone_display: str = ""
+    contact_phone_tel: str = ""
+    branch_name: str = ""
+    branch_address: str = ""
+    branch_nmls: str = ""
+
+
 class LandingPageCreate(BaseModel):
     title: str
     slug: str
-    config: dict = {}
+    config: Optional[LandingPageConfig] = None
+
 
 class LandingPageUpdate(BaseModel):
     title: Optional[str] = None
     slug: Optional[str] = None
-    config: Optional[dict] = None
+    config: Optional[LandingPageConfig] = None
 
-class ScheduleRequest(BaseModel):
-    candidate_id: int
-    selected_time: str
-    selected_day: str
 
-# ── Auth endpoints (CRUD) ──────────────────────────────────────────────────────
+class ApplicationSubmission(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    experience: Optional[str] = None
+    page_slug: Optional[str] = None
 
-@router.get("/")
-async def list_landing_pages(
-    db=Depends(_get_db),
-    current_user: Any = Depends(_get_cu),
+
+class ScheduleSlot(BaseModel):
+    slot: Optional[str] = None
+    page_slug: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _get_tenant_id(org_slug: str, db: Session) -> Optional[int]:
+    row = db.execute(
+        text("SELECT id FROM recruit_platform_tenants WHERE org_slug = :s LIMIT 1"),
+        {"s": org_slug},
+    ).fetchone()
+    return row[0] if row else None
+
+
+def _render(config: dict, org_slug: str, page_slug: str) -> str:
+    if not TEMPLATE_PATH.exists():
+        raise HTTPException(status_code=500, detail="Landing page template not found")
+
+    with open(TEMPLATE_PATH) as f:
+        html = f.read()
+
+    subs = {
+        "{{PRIMARY_COLOR}}": config.get("primary_color", "#6AAA26"),
+        "{{PRIMARY_COLOR_DARK}}": config.get("primary_color_dark", "#578F1E"),
+        "{{PRIMARY_COLOR_PALE}}": config.get("primary_color_pale", "#EFF7E1"),
+        "{{COMPANY_NAME}}": config.get("company_name", ""),
+        "{{COMPANY_NMLS_ID}}": config.get("company_nmls_id", ""),
+        "{{LOCATION_DISPLAY}}": config.get("location_display", ""),
+        "{{HERO_HEADLINE}}": config.get("hero_headline", ""),
+        "{{HERO_HEADLINE_PLAIN}}": config.get("hero_headline_plain", config.get("hero_headline", "")),
+        "{{SIGNING_BONUS}}": config.get("signing_bonus", ""),
+        "{{SIGNING_BONUS_AMOUNT}}": config.get("signing_bonus_amount", ""),
+        "{{YEAR1_RANGE}}": config.get("year1_range", ""),
+        "{{YEAR2_TOP}}": config.get("year2_top", ""),
+        "{{SENIOR_LO}}": config.get("senior_lo", ""),
+        "{{TEAM_LEAD}}": config.get("team_lead", ""),
+        "{{STAT_1_NUM}}": config.get("stat_1_num", ""),
+        "{{STAT_1_LABEL}}": config.get("stat_1_label", ""),
+        "{{STAT_2_NUM}}": config.get("stat_2_num", ""),
+        "{{STAT_2_LABEL}}": config.get("stat_2_label", ""),
+        "{{STAT_3_NUM}}": config.get("stat_3_num", ""),
+        "{{STAT_3_LABEL}}": config.get("stat_3_label", ""),
+        "{{STAT_4_NUM}}": config.get("stat_4_num", ""),
+        "{{STAT_4_LABEL}}": config.get("stat_4_label", ""),
+        "{{MANAGER_NAME}}": config.get("manager_name", ""),
+        "{{MANAGER_INITIALS}}": config.get("manager_initials", ""),
+        "{{MANAGER_TITLE}}": config.get("manager_title", "Branch Manager"),
+        "{{MANAGER_NMLS}}": config.get("manager_nmls", ""),
+        "{{CONTACT_PHONE_DISPLAY}}": config.get("contact_phone_display", ""),
+        "{{CONTACT_PHONE_TEL}}": config.get("contact_phone_tel", ""),
+        "{{BRANCH_NAME}}": config.get("branch_name", ""),
+        "{{BRANCH_ADDRESS}}": config.get("branch_address", ""),
+        "{{BRANCH_NMLS}}": config.get("branch_nmls", ""),
+        "{{API_BASE_URL}}": API_BASE_URL,
+        "{{ORG_SLUG}}": org_slug,
+        "{{PAGE_SLUG}}": page_slug,
+    }
+
+    for placeholder, value in subs.items():
+        html = html.replace(placeholder, value)
+
+    return html
+
+
+def _page_row_to_dict(row) -> dict:
+    return {
+        "id": row[0],
+        "organization_id": row[1],
+        "title": row[2],
+        "slug": row[3],
+        "status": row[4],
+        "config": row[5] or {},
+        "view_count": row[6],
+        "submission_count": row[7],
+        "created_by": row[8],
+        "created_at": row[9].isoformat() if row[9] else None,
+        "updated_at": row[10].isoformat() if row[10] else None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Authenticated endpoints
+# ---------------------------------------------------------------------------
+
+@landing_pages_router.get("")
+def list_landing_pages(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    from sqlalchemy import text
-    rows = db.execute(text("""
-        SELECT id, title, slug, status, view_count, submission_count, created_at, updated_at
-        FROM recruit_landing_pages
-        ORDER BY created_at DESC
-    """)).fetchall()
-    return [dict(r._mapping) for r in rows]
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization")
+
+    rows = db.execute(
+        text("""
+            SELECT id, organization_id, title, slug, status, config,
+                   view_count, submission_count, created_by, created_at, updated_at
+            FROM recruit_landing_pages
+            WHERE organization_id = :oid
+            ORDER BY updated_at DESC
+        """),
+        {"oid": org_id},
+    ).fetchall()
+
+    return [_page_row_to_dict(r) for r in rows]
 
 
-@router.post("/", status_code=201)
-async def create_landing_page(
+@landing_pages_router.post("", status_code=201)
+def create_landing_page(
     body: LandingPageCreate,
-    db=Depends(_get_db),
-    current_user: Any = Depends(_get_cu),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    from sqlalchemy import text
-    existing = db.execute(text("SELECT id FROM recruit_landing_pages WHERE slug = :s"), {"s": body.slug}).fetchone()
-    if existing:
-        raise HTTPException(status_code=409, detail="Slug already in use")
-    row = db.execute(text("""
-        INSERT INTO recruit_landing_pages (organization_id, title, slug, config, created_by)
-        VALUES (:org, :title, :slug, :cfg::jsonb, :uid)
-        RETURNING id, title, slug, status, config, created_at
-    """), {
-        "org": current_user.organization_id,
-        "title": body.title,
-        "slug": body.slug,
-        "cfg": json.dumps(body.config),
-        "uid": current_user.id,
-    }).fetchone()
-    db.commit()
-    return dict(row._mapping)
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization")
+
+    config = body.config.model_dump() if body.config else {}
+
+    try:
+        row = db.execute(
+            text("""
+                INSERT INTO recruit_landing_pages
+                    (organization_id, title, slug, status, config, created_by)
+                VALUES (:oid, :title, :slug, 'draft', :config::jsonb, :uid)
+                RETURNING id, organization_id, title, slug, status, config,
+                          view_count, submission_count, created_by, created_at, updated_at
+            """),
+            {
+                "oid": org_id,
+                "title": body.title,
+                "slug": body.slug.lower().strip(),
+                "config": __import__("json").dumps(config),
+                "uid": getattr(current_user, "id", None),
+            },
+        ).fetchone()
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        if "uq_recruit_landing_pages_org_slug" in str(e):
+            raise HTTPException(status_code=409, detail="Slug already exists")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return _page_row_to_dict(row)
 
 
-@router.get("/{page_id}")
-async def get_landing_page(
+@landing_pages_router.get("/{page_id}")
+def get_landing_page(
     page_id: int,
-    db=Depends(_get_db),
-    current_user: Any = Depends(_get_cu),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    from sqlalchemy import text
-    row = db.execute(text("SELECT * FROM recruit_landing_pages WHERE id = :id"), {"id": page_id}).fetchone()
+    org_id = getattr(current_user, "organization_id", None)
+    row = db.execute(
+        text("""
+            SELECT id, organization_id, title, slug, status, config,
+                   view_count, submission_count, created_by, created_at, updated_at
+            FROM recruit_landing_pages
+            WHERE id = :pid AND organization_id = :oid
+        """),
+        {"pid": page_id, "oid": org_id},
+    ).fetchone()
+
     if not row:
-        raise HTTPException(status_code=404, detail="Landing page not found")
-    return dict(row._mapping)
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    return _page_row_to_dict(row)
 
 
-@router.patch("/{page_id}")
-async def update_landing_page(
+@landing_pages_router.put("/{page_id}")
+def update_landing_page(
     page_id: int,
     body: LandingPageUpdate,
-    db=Depends(_get_db),
-    current_user: Any = Depends(_get_cu),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    from sqlalchemy import text
-    if not db.execute(text("SELECT id FROM recruit_landing_pages WHERE id = :id"), {"id": page_id}).fetchone():
-        raise HTTPException(status_code=404, detail="Landing page not found")
-    updates, params = [], {"id": page_id}
+    import json
+    org_id = getattr(current_user, "organization_id", None)
+
+    existing = db.execute(
+        text("SELECT id, config FROM recruit_landing_pages WHERE id = :pid AND organization_id = :oid"),
+        {"pid": page_id, "oid": org_id},
+    ).fetchone()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    updates = {}
     if body.title is not None:
-        updates.append("title = :title"); params["title"] = body.title
+        updates["title"] = body.title
     if body.slug is not None:
-        updates.append("slug = :slug"); params["slug"] = body.slug
+        updates["slug"] = body.slug.lower().strip()
     if body.config is not None:
-        updates.append("config = :cfg::jsonb"); params["cfg"] = json.dumps(body.config)
-    if updates:
-        updates.append("updated_at = NOW()")
-        db.execute(text(f"UPDATE recruit_landing_pages SET {', '.join(updates)} WHERE id = :id"), params)
+        updates["config"] = json.dumps(body.config.model_dump())
+
+    if not updates:
+        return {"detail": "no changes"}
+
+    set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
+    set_clauses += ", updated_at = NOW()"
+    params = {**updates, "pid": page_id, "oid": org_id}
+    if "config" in params:
+        set_clauses = set_clauses.replace("config = :config", "config = :config::jsonb")
+
+    try:
+        row = db.execute(
+            text(f"""
+                UPDATE recruit_landing_pages SET {set_clauses}
+                WHERE id = :pid AND organization_id = :oid
+                RETURNING id, organization_id, title, slug, status, config,
+                          view_count, submission_count, created_by, created_at, updated_at
+            """),
+            params,
+        ).fetchone()
         db.commit()
-    row = db.execute(text("SELECT * FROM recruit_landing_pages WHERE id = :id"), {"id": page_id}).fetchone()
-    return dict(row._mapping)
+    except Exception as e:
+        db.rollback()
+        if "uq_recruit_landing_pages_org_slug" in str(e):
+            raise HTTPException(status_code=409, detail="Slug already exists")
+        raise
+
+    return _page_row_to_dict(row)
 
 
-@router.post("/{page_id}/publish")
-async def publish_page(page_id: int, db=Depends(_get_db), current_user: Any = Depends(_get_cu)):
-    from sqlalchemy import text
-    db.execute(text("UPDATE recruit_landing_pages SET status='published', updated_at=NOW() WHERE id=:id"), {"id": page_id})
+@landing_pages_router.delete("/{page_id}", status_code=204)
+def delete_landing_page(
+    page_id: int,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    org_id = getattr(current_user, "organization_id", None)
+    result = db.execute(
+        text("DELETE FROM recruit_landing_pages WHERE id = :pid AND organization_id = :oid"),
+        {"pid": page_id, "oid": org_id},
+    )
     db.commit()
-    return {"status": "published"}
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Page not found")
 
 
-@router.post("/{page_id}/unpublish")
-async def unpublish_page(page_id: int, db=Depends(_get_db), current_user: Any = Depends(_get_cu)):
-    from sqlalchemy import text
-    db.execute(text("UPDATE recruit_landing_pages SET status='draft', updated_at=NOW() WHERE id=:id"), {"id": page_id})
+@landing_pages_router.post("/{page_id}/publish")
+def publish_landing_page(
+    page_id: int,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    org_id = getattr(current_user, "organization_id", None)
+    row = db.execute(
+        text("""
+            UPDATE recruit_landing_pages SET status = 'published', updated_at = NOW()
+            WHERE id = :pid AND organization_id = :oid
+            RETURNING id, organization_id, title, slug, status, config,
+                      view_count, submission_count, created_by, created_at, updated_at
+        """),
+        {"pid": page_id, "oid": org_id},
+    ).fetchone()
     db.commit()
-    return {"status": "draft"}
-
-
-@router.delete("/{page_id}", status_code=204)
-async def delete_landing_page(page_id: int, db=Depends(_get_db), current_user: Any = Depends(_get_cu)):
-    from sqlalchemy import text
-    db.execute(text("DELETE FROM recruit_landing_pages WHERE id=:id"), {"id": page_id})
-    db.commit()
-
-
-@router.get("/{page_id}/preview", response_class=HTMLResponse)
-async def preview_landing_page(page_id: int, db=Depends(_get_db), current_user: Any = Depends(_get_cu)):
-    from sqlalchemy import text
-    row = db.execute(text("""
-        SELECT lp.*, o.slug as org_slug
-        FROM recruit_landing_pages lp
-        JOIN organizations o ON o.id = lp.organization_id
-        WHERE lp.id = :id
-    """), {"id": page_id}).fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Landing page not found")
-    data = dict(row._mapping)
-    return HTMLResponse(_render_template(data.get('config') or {}, data['org_slug'], data['slug']))
+        raise HTTPException(status_code=404, detail="Page not found")
+    return _page_row_to_dict(row)
 
 
-# ── Public endpoints ───────────────────────────────────────────────────────────
+@landing_pages_router.post("/{page_id}/unpublish")
+def unpublish_landing_page(
+    page_id: int,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    org_id = getattr(current_user, "organization_id", None)
+    row = db.execute(
+        text("""
+            UPDATE recruit_landing_pages SET status = 'draft', updated_at = NOW()
+            WHERE id = :pid AND organization_id = :oid
+            RETURNING id, organization_id, title, slug, status, config,
+                      view_count, submission_count, created_by, created_at, updated_at
+        """),
+        {"pid": page_id, "oid": org_id},
+    ).fetchone()
+    db.commit()
+    if not row:
+        raise HTTPException(status_code=404, detail="Page not found")
+    return _page_row_to_dict(row)
 
-@public_router.get("/p/{slug}", response_class=HTMLResponse)
-async def serve_landing_page(slug: str):
-    from database import get_db
-    from sqlalchemy import text
-    db = next(get_db())
+
+@landing_pages_router.get("/{page_id}/preview")
+def preview_landing_page(
+    page_id: int,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    org_id = getattr(current_user, "organization_id", None)
+    row = db.execute(
+        text("""
+            SELECT rp.id, rp.slug, rp.config, t.org_slug
+            FROM recruit_landing_pages rp
+            JOIN recruit_platform_tenants t ON t.id = rp.organization_id
+            WHERE rp.id = :pid AND rp.organization_id = :oid
+        """),
+        {"pid": page_id, "oid": org_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    html = _render(row[2] or {}, row[3], row[1])
+    return Response(content=html, media_type="text/html")
+
+
+# ---------------------------------------------------------------------------
+# Public endpoints
+# ---------------------------------------------------------------------------
+
+@landing_pages_public_router.get("/p/{slug}")
+def serve_landing_page(slug: str, db: Session = Depends(get_db)):
+    row = db.execute(
+        text("""
+            SELECT rp.id, rp.slug, rp.config, t.org_slug
+            FROM recruit_landing_pages rp
+            JOIN recruit_platform_tenants t ON t.id = rp.organization_id
+            WHERE rp.slug = :slug AND rp.status = 'published'
+            LIMIT 1
+        """),
+        {"slug": slug},
+    ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    # Increment view count asynchronously
     try:
-        row = db.execute(text("""
-            SELECT lp.*, o.slug as org_slug
-            FROM recruit_landing_pages lp
-            JOIN organizations o ON o.id = lp.organization_id
-            WHERE lp.slug = :slug AND lp.status = 'published'
-        """), {"slug": slug}).fetchone()
-        if not row:
-            return HTMLResponse("<h1>Page not found</h1>", status_code=404)
-        data = dict(row._mapping)
-        db.execute(text("UPDATE recruit_landing_pages SET view_count = view_count + 1 WHERE slug = :s"), {"s": slug})
-        db.commit()
-        return HTMLResponse(_render_template(data.get('config') or {}, data['org_slug'], data['slug']))
-    finally:
-        db.close()
-
-
-@public_router.post("/p/{slug}/view", status_code=204)
-async def track_view(slug: str):
-    return Response(status_code=204)
-
-
-@public_router.post("/public/apply/{org_slug}/schedule")
-async def schedule_interview(org_slug: str, body: ScheduleRequest):
-    from database import get_db
-    from sqlalchemy import text
-    db = next(get_db())
-    try:
-        db.execute(text("""
-            UPDATE mm_candidates
-            SET talent_profile = COALESCE(talent_profile, '{}')::jsonb
-                || :update::jsonb
-            WHERE id = :id
-        """), {
-            "id": body.candidate_id,
-            "update": json.dumps({"interview_slot": f"{body.selected_time} on {body.selected_day}"}),
-        })
+        db.execute(
+            text("UPDATE recruit_landing_pages SET view_count = view_count + 1 WHERE id = :pid"),
+            {"pid": row[0]},
+        )
         db.commit()
     except Exception:
-        pass
-    finally:
-        db.close()
-    return {"ok": True}
+        db.rollback()
+
+    html = _render(row[2] or {}, row[3], row[1])
+    return Response(content=html, media_type="text/html")
+
+
+@landing_pages_public_router.post("/public/apply/{org_slug}", status_code=201)
+def submit_application(
+    org_slug: str,
+    body: ApplicationSubmission,
+    db: Session = Depends(get_db),
+):
+    tenant_id = _get_tenant_id(org_slug, db)
+    if not tenant_id:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Increment submission count
+    if body.page_slug:
+        try:
+            db.execute(
+                text("""
+                    UPDATE recruit_landing_pages
+                    SET submission_count = submission_count + 1
+                    WHERE organization_id = :oid AND slug = :slug
+                """),
+                {"oid": tenant_id, "slug": body.page_slug},
+            )
+        except Exception:
+            pass
+
+    # Insert applicant record (reuse existing recruit_applicants table if it exists)
+    try:
+        db.execute(
+            text("""
+                INSERT INTO recruit_applicants
+                    (organization_id, first_name, last_name, email, phone,
+                     experience_level, source, stage, created_at)
+                VALUES (:oid, :fn, :ln, :email, :phone, :exp, :src, 'new', NOW())
+                ON CONFLICT (organization_id, email) DO NOTHING
+            """),
+            {
+                "oid": tenant_id,
+                "fn": body.first_name or "",
+                "ln": body.last_name or "",
+                "email": body.email or "",
+                "phone": body.phone or "",
+                "exp": body.experience or "",
+                "src": f"landing:{body.page_slug or 'unknown'}",
+            },
+        )
+    except Exception as e:
+        logger.warning(f"Could not insert applicant from landing page: {e}")
+
+    db.commit()
+    return {"status": "received"}
+
+
+@landing_pages_public_router.post("/public/schedule/{org_slug}", status_code=201)
+def submit_schedule(
+    org_slug: str,
+    body: ScheduleSlot,
+    db: Session = Depends(get_db),
+):
+    tenant_id = _get_tenant_id(org_slug, db)
+    if not tenant_id:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    logger.info(f"Schedule slot submitted for org {org_slug}: {body.slot}")
+    return {"status": "received"}

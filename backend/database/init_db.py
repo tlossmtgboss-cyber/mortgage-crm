@@ -2448,6 +2448,22 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ recruit platform admin seed note: {e}")
 
+        # Recruit Platform: chatbot KB + chat session tables
+        try:
+            from migrations.add_recruit_chatbot_tables import run_migration as run_chatbot_tables
+            run_chatbot_tables(_engine)
+            logger.info("✅ recruit chatbot tables ready")
+        except Exception as e:
+            logger.warning(f"⚠️ recruit chatbot tables note: {e}")
+
+        # Recruit Platform: landing pages (website builder)
+        try:
+            from migrations.add_recruit_landing_pages import run_migration as run_landing_pages
+            run_landing_pages(_engine)
+            logger.info("✅ recruit_landing_pages table ready")
+        except Exception as e:
+            logger.warning(f"⚠️ recruit_landing_pages migration note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")

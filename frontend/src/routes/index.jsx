@@ -911,13 +911,19 @@ export function getRoutes(layoutProps, options = {}) {
     }>
       <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><RecruitDashboard /></Suspense>} />
       <Route path="jobs" element={<Suspense fallback={<PageLoader />}><RecruitJobs /></Suspense>} />
+      <Route path="knowledge-base" element={<Suspense fallback={<PageLoader />}><KnowledgeBase /></Suspense>} />
+      <Route path="embed-settings" element={<Suspense fallback={<PageLoader />}><EmbedSettings /></Suspense>} />
+      <Route path="website-builder" element={<Suspense fallback={<PageLoader />}><WebsiteBuilder /></Suspense>} />
       <Route path="license-manager" element={<Suspense fallback={<PageLoader />}><LicenseManager /></Suspense>} />
       <Route path="website-builder" element={<Suspense fallback={<PageLoader />}><RecruitWebsiteBuilder /></Suspense>} />
       <Route path="knowledge-base" element={<Suspense fallback={<PageLoader />}><RecruitKnowledgeBase /></Suspense>} />
       <Route path="chat-widget" element={<Suspense fallback={<PageLoader />}><RecruitChatWidget /></Suspense>} />
       <Route path="embed-settings" element={<Suspense fallback={<PageLoader />}><RecruitEmbedSettings /></Suspense>} />
     </Route>,
-    <Route key="/recruit/jobs/public/:orgSlug" path="/recruit/jobs/public/:orgSlug" element={
+    <Route key="/recruit/chat-widget/:tenantSlug" path="/recruit/chat-widget/:tenantSlug" element={
+      <Suspense fallback={<PageLoader />}><RecruitChatWidget /></Suspense>
+    } />,
+    <Route key="/recruit/jobs-public/:orgSlug" path="/recruit/jobs-public/:orgSlug" element={
       <Suspense fallback={<PageLoader />}><RecruitJobsPublic /></Suspense>
     } />,
     <Route key="/recruit/login" path="/recruit/login" element={
