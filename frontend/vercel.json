@@ -35,6 +35,10 @@
       "destination": "https://api.perenniaai.com/api/:path*"
     },
     {
+      "source": "/recruit/:path*",
+      "destination": "/index.html"
+    },
+    {
       "source": "/:slug([a-z0-9][a-z0-9-]*)",
       "destination": "https://api.perenniaai.com/api/v1/recruit-platform/p/:slug"
     },
