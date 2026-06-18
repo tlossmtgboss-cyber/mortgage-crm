@@ -405,7 +405,7 @@ def preview_landing_page(
     org_id = getattr(current_user, "organization_id", None)
     row = db.execute(
         text("""
-            SELECT rp.id, rp.slug, rp.config, t.org_slug
+            SELECT rp.id, rp.slug, rp.config, t.slug
             FROM recruit_landing_pages rp
             JOIN organizations t ON t.id = rp.organization_id
             WHERE rp.id = :pid AND rp.organization_id = :oid
@@ -427,7 +427,7 @@ def preview_landing_page(
 def serve_landing_page(slug: str, db: Session = Depends(get_db)):
     row = db.execute(
         text("""
-            SELECT rp.id, rp.slug, rp.config, t.org_slug
+            SELECT rp.id, rp.slug, rp.config, t.slug
             FROM recruit_landing_pages rp
             JOIN organizations t ON t.id = rp.organization_id
             WHERE rp.slug = :slug AND rp.status = 'published'
