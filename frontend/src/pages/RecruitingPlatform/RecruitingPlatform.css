@@ -1,0 +1,468 @@
+/* ── Recruiting Platform — layout ───────────────────────────────────────── */
+.rp-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: #f8f9fa;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+.rp-sidebar {
+  width: 220px;
+  min-width: 220px;
+  background: #1a1f2e;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  box-shadow: 2px 0 8px rgba(0,0,0,.15);
+}
+
+.rp-sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+.rp-logo-mark {
+  display: block;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #B8924A 0%, #C9A44E 100%);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.rp-sidebar-title {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.rp-sidebar-sub {
+  color: rgba(255,255,255,.4);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.rp-nav {
+  flex: 1;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rp-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: rgba(255,255,255,.6);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background .15s, color .15s;
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.rp-nav-item:hover {
+  background: rgba(255,255,255,.07);
+  color: rgba(255,255,255,.9);
+}
+
+.rp-nav-item--active {
+  background: rgba(184,146,74,.15);
+  color: #C9A44E;
+}
+
+.rp-nav-item--ghost {
+  margin-top: 4px;
+  color: rgba(255,255,255,.35);
+  font-size: 12px;
+}
+
+.rp-nav-icon {
+  font-size: 16px;
+  width: 18px;
+  text-align: center;
+  opacity: .7;
+}
+
+.rp-sidebar-footer {
+  padding: 8px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+
+/* ── Main content ──────────────────────────────────────────────────────────── */
+.rp-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* ── Page header ─────────────────────────────────────────────────────────── */
+.rp-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.rp-page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1f2e;
+}
+
+.rp-page-sub {
+  color: #6b7280;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+/* ── Cards / panels ─────────────────────────────────────────────────────── */
+.rp-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.rp-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 14px;
+}
+
+/* ── Calendar grid ──────────────────────────────────────────────────────── */
+.rp-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: #e5e7eb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rp-cal-day-header {
+  background: #f9fafb;
+  text-align: center;
+  padding: 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.rp-cal-cell {
+  background: #fff;
+  min-height: 100px;
+  padding: 6px;
+  vertical-align: top;
+  position: relative;
+}
+
+.rp-cal-cell--today {
+  background: #fdf7ed;
+}
+
+.rp-cal-cell--other-month {
+  background: #fafafa;
+  opacity: .5;
+}
+
+.rp-cal-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.rp-cal-event {
+  font-size: 11px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rp-cal-event--phone_screen    { background: #dbeafe; color: #1e40af; }
+.rp-cal-event--video_interview { background: #d1fae5; color: #065f46; }
+.rp-cal-event--panel_interview { background: #ede9fe; color: #4c1d95; }
+.rp-cal-event--culture_fit     { background: #fef3c7; color: #92400e; }
+.rp-cal-event--offer_call      { background: #dcfce7; color: #14532d; }
+.rp-cal-event--default         { background: #f3f4f6; color: #374151; }
+
+/* ── Milestones board ────────────────────────────────────────────────────── */
+.rp-milestone-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.rp-milestone-col {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.rp-milestone-col-header {
+  padding: 12px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rp-milestone-col-header--overdue  { background: #fef2f2; color: #b91c1c; border-bottom: 2px solid #fca5a5; }
+.rp-milestone-col-header--this-week { background: #fff7ed; color: #c2410c; border-bottom: 2px solid #fdba74; }
+.rp-milestone-col-header--later    { background: #f0fdf4; color: #166534; border-bottom: 2px solid #86efac; }
+
+.rp-milestone-badge {
+  background: rgba(0,0,0,.1);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 11px;
+}
+
+.rp-milestone-cards {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 80px;
+}
+
+.rp-milestone-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: default;
+}
+
+.rp-milestone-card:hover {
+  background: #f3f4f6;
+}
+
+.rp-milestone-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 2px;
+}
+
+.rp-milestone-card-type {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 6px;
+  text-transform: capitalize;
+}
+
+.rp-milestone-card-date {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.rp-milestone-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.rp-btn-xs {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  cursor: pointer;
+  color: #374151;
+}
+
+.rp-btn-xs:hover { background: #f3f4f6; }
+.rp-btn-xs--green { border-color: #86efac; color: #166534; }
+.rp-btn-xs--green:hover { background: #f0fdf4; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.rp-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: opacity .15s;
+}
+
+.rp-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.rp-btn--primary {
+  background: linear-gradient(135deg, #B8924A, #C9A44E);
+  color: #fff;
+}
+
+.rp-btn--primary:hover:not(:disabled) { opacity: .9; }
+
+.rp-btn--secondary {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.rp-btn--secondary:hover:not(:disabled) { background: #f9fafb; }
+
+/* ── Booking page ────────────────────────────────────────────────────────── */
+.rp-booking-page {
+  min-height: 100vh;
+  background: #f3f4f6;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+}
+
+.rp-booking-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.08);
+  width: 100%;
+  max-width: 560px;
+  overflow: hidden;
+}
+
+.rp-booking-hero {
+  background: linear-gradient(135deg, #1a1f2e 0%, #2d3449 100%);
+  padding: 28px 28px 24px;
+  color: #fff;
+}
+
+.rp-booking-hero-org {
+  font-size: 12px;
+  color: rgba(255,255,255,.5);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 6px;
+}
+
+.rp-booking-hero-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.rp-booking-hero-sub {
+  font-size: 13px;
+  color: rgba(255,255,255,.65);
+}
+
+.rp-booking-body {
+  padding: 24px 28px;
+}
+
+.rp-time-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.rp-time-slot {
+  padding: 11px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: #374151;
+  background: #fff;
+  transition: border-color .15s, background .15s;
+  text-align: left;
+}
+
+.rp-time-slot:hover { border-color: #B8924A; background: #fdf7ed; }
+.rp-time-slot--selected { border-color: #B8924A; background: #fdf3e3; font-weight: 600; }
+
+.rp-booking-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rp-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.rp-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #111827;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.rp-input:focus {
+  outline: none;
+  border-color: #B8924A;
+  box-shadow: 0 0 0 3px rgba(184,146,74,.15);
+}
+
+/* ── States ──────────────────────────────────────────────────────────────── */
+.rp-loading {
+  text-align: center;
+  padding: 40px;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.rp-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.rp-error {
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .rp-sidebar { display: none; }
+  .rp-main { padding: 16px; }
+  .rp-milestone-board { grid-template-columns: 1fr; }
+}

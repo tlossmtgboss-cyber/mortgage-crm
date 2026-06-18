@@ -1923,6 +1923,14 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ campaign template seed note: {e}")
 
+        # Recruit Calendar: recruit_interview_details + recruit_milestones tables
+        try:
+            from migrations.add_recruit_calendar_tables import run_migration as run_recruit_calendar
+            run_recruit_calendar(_engine)
+            logger.info("✅ recruit_interview_details + recruit_milestones tables ready")
+        except Exception as e:
+            logger.warning(f"⚠️ recruit calendar tables note: {e}")
+
         # Add briefing_preferences JSONB column to users
         try:
             from migrations.add_briefing_preferences import run_migration as run_briefing_prefs

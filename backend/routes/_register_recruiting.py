@@ -93,4 +93,13 @@ def register_recruiting_routes(app, get_db, get_current_user, get_current_user_f
     except Exception as e:
         logger.warning(f"Could not load Recruiting EEOC routes: {e}")
 
+    # Include Recruit Calendar routes (standalone recruiting scheduling platform)
+    try:
+        from routes.recruit_calendar import router as recruit_calendar_router, public_router as recruit_calendar_public_router
+        app.include_router(recruit_calendar_router, tags=["Recruit Calendar"])
+        app.include_router(recruit_calendar_public_router, tags=["Recruit Calendar"])
+        logger.info("Recruit Calendar routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load Recruit Calendar routes: {e}")
+
     logger.info("Recruiting route group loaded")
