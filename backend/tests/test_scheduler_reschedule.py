@@ -397,11 +397,11 @@ class TestPublicRescheduleConfirm:
         mock_service = MagicMock()
         mock_service.verify_reschedule_token.return_value = {"appt_id": 100, "org_id": 1}
         mock_service._get_appointment.return_value = mock_appt
-        mock_service.confirm_reschedule.return_value = {
+        mock_service.confirm_reschedule = AsyncMock(return_value={
             "appointment_id": 100,
             "new_start": "2026-03-26T10:00:00",
             "new_end": "2026-03-26T10:30:00",
-        }
+        })
         mock_svc_factory.return_value = mock_service
 
         # Patch the models query for audit logging

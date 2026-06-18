@@ -1105,16 +1105,17 @@ class TestRescheduleService:
 
             # Pre-seed the _helpers module with a mock _check_appointment_conflict
             # so the inline import in confirm_reschedule finds it
+            import asyncio
             mock_helpers_mod = MagicMock()
-            mock_helpers_mod._check_appointment_conflict = MagicMock()
+            mock_helpers_mod._check_appointment_conflict = AsyncMock()
             with patch.dict(sys.modules, {"routes.scheduler._helpers": mock_helpers_mod}):
                 with patch("smart_scheduler_models.AppointmentStatus", MockAppointmentStatus):
-                    svc.confirm_reschedule(
+                    asyncio.run(svc.confirm_reschedule(
                         appointment_id=42,
                         new_start=datetime(2026, 3, 21, 10, 0),
                         new_end=datetime(2026, 3, 21, 10, 30),
                         org_id=100,
-                    )
+                    ))
 
             svc._send_reschedule_confirmation.assert_called_once()
 
@@ -1138,14 +1139,15 @@ class TestRescheduleService:
             svc._get_appointment = MagicMock(return_value=appt)
             svc._reschedule_count = MagicMock(return_value=0)
 
+            import asyncio
             with patch("smart_scheduler_models.AppointmentStatus", MockAppointmentStatus):
                 with pytest.raises(ValueError, match="Cannot reschedule"):
-                    svc.confirm_reschedule(
+                    asyncio.run(svc.confirm_reschedule(
                         appointment_id=42,
                         new_start=datetime(2026, 3, 21, 10, 0),
                         new_end=datetime(2026, 3, 21, 10, 30),
                         org_id=100,
-                    )
+                    ))
 
 
 class TestRescheduleSchemas:
