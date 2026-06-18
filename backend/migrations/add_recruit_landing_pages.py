@@ -92,30 +92,34 @@ def run_migration(engine=None) -> None:
         conn.commit()
         logger.info("✅ recruit_landing_pages table ready")
 
-    # Seed in a separate transaction so RLS FORCE doesn't block us.
-    # We fetch the org slug and set app.current_tenant so the tenant
-    # isolation policy passes for this INSERT.
+    # Seed callcenter page for every org. Each INSERT is in its own
+    # engine.begin() so FORCE RLS doesn't block us — we set app.current_tenant
+    # to the org slug before inserting so the tenant isolation policy passes.
+    # ON CONFLICT DO NOTHING makes this idempotent across restarts.
     try:
-        with engine.begin() as seed_conn:
-            org = seed_conn.execute(
-                text("SELECT id, slug FROM organizations LIMIT 1")
-            ).fetchone()
-            if org:
-                seed_conn.execute(
-                    text("SET LOCAL app.current_tenant = :slug"),
-                    {"slug": org[1]},
-                )
-                seed_conn.execute(text("""
-                    INSERT INTO recruit_landing_pages
-                        (organization_id, title, slug, status, config)
-                    VALUES (:org_id, :title, :slug, :status, CAST(:config AS jsonb))
-                    ON CONFLICT (organization_id, slug) DO NOTHING
-                """), {
-                    "org_id": org[0],
-                    "title": "Call Center — SC",
-                    "slug": "callcenter",
-                    "status": "published",
-                    "config": json.dumps(_CALLCENTER_CONFIG),
-                })
+        with engine.connect() as list_conn:
+            orgs = list_conn.execute(
+                text("SELECT id, slug FROM organizations")
+            ).fetchall()
+        for org_id, org_slug in orgs:
+            try:
+                with engine.begin() as seed_conn:
+                    seed_conn.execute(
+                        text(f"SET app.current_tenant = '{org_slug}'")
+                    )
+                    seed_conn.execute(text("""
+                        INSERT INTO recruit_landing_pages
+                            (organization_id, title, slug, status, config)
+                        VALUES (:org_id, :title, :slug, :status, CAST(:config AS jsonb))
+                        ON CONFLICT (organization_id, slug) DO NOTHING
+                    """), {
+                        "org_id": org_id,
+                        "title": "Call Center — SC",
+                        "slug": "callcenter",
+                        "status": "published",
+                        "config": json.dumps(_CALLCENTER_CONFIG),
+                    })
+            except Exception as e:
+                logger.warning(f"Could not seed callcenter page for org {org_id}: {e}")
     except Exception as e:
-        logger.warning(f"Could not seed callcenter page: {e}")
+        logger.warning(f"Could not seed callcenter pages: {e}")
