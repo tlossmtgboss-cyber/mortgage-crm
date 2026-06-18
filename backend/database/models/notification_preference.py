@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import (
-    Column, String, Boolean, DateTime, ForeignKey, Index
+    Column, String, Boolean, DateTime, ForeignKey, Index, Integer
 )
 
 from db import Base
@@ -18,7 +18,8 @@ class NotificationPreference(Base):
     __tablename__ = "notification_preferences"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    # Integer FK matching users.id (Integer primary key)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
 
     # Category toggles — each maps to a push notification type family
     loan_updates = Column(Boolean, default=True)

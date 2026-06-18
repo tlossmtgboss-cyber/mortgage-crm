@@ -50,7 +50,7 @@ class Lead(Base):
         Index('ix_leads_created_at', 'created_at'),
         Index('ix_leads_referral_partner_id', 'referral_partner_id'),
         Index('ix_leads_owner_stage', 'owner_id', 'stage'),
-        Index('ix_leads_organization_id', 'organization_id'),
+        # ix_leads_organization_id is created by index=True on the column below; no explicit Index needed.
         Index('ix_leads_org_stage', 'organization_id', 'stage'),
         Index('ix_leads_org_created', 'organization_id', 'created_at'),
         # Performance indexes (added via add_performance_indexes migration)
@@ -297,7 +297,7 @@ class Loan(Base):
         Index('ix_loans_funded_date', 'funded_date'),
         Index('ix_loans_created_at', 'created_at'),
         Index('ix_loans_officer_stage', 'loan_officer_id', 'stage'),
-        Index('ix_loans_organization_id', 'organization_id'),
+        # ix_loans_organization_id is created by index=True on the column below; no explicit Index needed.
         Index('ix_loans_org_stage', 'organization_id', 'stage'),
         Index('ix_loans_org_created', 'organization_id', 'created_at'),
         # Performance indexes (added via add_performance_indexes migration)
