@@ -89,11 +89,23 @@ def run_migration(engine=None) -> None:
                 USING (status = 'published');
         """))
 
-        # Seed the callcenter page for the first org if not already present
-        try:
-            org = conn.execute(text("SELECT id FROM organizations LIMIT 1")).fetchone()
+        conn.commit()
+        logger.info("✅ recruit_landing_pages table ready")
+
+    # Seed in a separate transaction so RLS FORCE doesn't block us.
+    # We fetch the org slug and set app.current_tenant so the tenant
+    # isolation policy passes for this INSERT.
+    try:
+        with engine.begin() as seed_conn:
+            org = seed_conn.execute(
+                text("SELECT id, slug FROM organizations LIMIT 1")
+            ).fetchone()
             if org:
-                conn.execute(text("""
+                seed_conn.execute(
+                    text("SET LOCAL app.current_tenant = :slug"),
+                    {"slug": org[1]},
+                )
+                seed_conn.execute(text("""
                     INSERT INTO recruit_landing_pages
                         (organization_id, title, slug, status, config)
                     VALUES (:org_id, :title, :slug, :status, CAST(:config AS jsonb))
@@ -105,8 +117,5 @@ def run_migration(engine=None) -> None:
                     "status": "published",
                     "config": json.dumps(_CALLCENTER_CONFIG),
                 })
-        except Exception as e:
-            logger.warning(f"Could not seed callcenter page: {e}")
-
-        conn.commit()
-        logger.info("✅ recruit_landing_pages table ready")
+    except Exception as e:
+        logger.warning(f"Could not seed callcenter page: {e}")
