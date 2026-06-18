@@ -82,6 +82,11 @@ def run_migration(engine=None) -> None:
                         LIMIT 1
                     )
                 );
+
+            DROP POLICY IF EXISTS recruit_lp_public_read ON recruit_landing_pages;
+            CREATE POLICY recruit_lp_public_read ON recruit_landing_pages
+                FOR SELECT
+                USING (status = 'published');
         """))
 
         # Seed the callcenter page for the first org if not already present

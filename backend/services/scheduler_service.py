@@ -154,31 +154,13 @@ class SchedulerService:
     """
 
     def __init__(self):
-        # Build a persistent SQLAlchemy job store so jobs survive container
-        # restarts and rolling deploys.  We reuse the application's sync engine
-        # (already configured with the correct dialect and credentials) rather
-        # than constructing a new URL, which avoids asyncpg/psycopg2 dialect
-        # mismatches.  APScheduler creates the `apscheduler_jobs` table
-        # automatically on first start if it doesn't exist.
-        try:
-            from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-            from database import engine as _db_engine
-            _jobstores = {
-                "default": SQLAlchemyJobStore(
-                    engine=_db_engine,
-                    tablename="apscheduler_jobs",
-                )
-            }
-            logger.info("APScheduler: using SQLAlchemy job store (persistent, survives restarts)")
-        except Exception as _js_err:
-            # Safety net: fall back to in-memory store if the import or engine
-            # is unavailable (e.g. during unit tests with no DB).
-            _jobstores = {}
-            logger.warning(
-                "APScheduler: failed to configure SQLAlchemy job store, "
-                "falling back to in-memory store (jobs will not survive restarts): %s",
-                _js_err,
-            )
+        # Use in-memory job store only. All jobs are re-registered at startup
+        # via register_from_registry(), so persistence adds no value. The
+        # SQLAlchemy store was causing "missing 1 required positional argument:
+        # self" failures: APScheduler pickles bound methods into the DB, but
+        # after a deploy the unpickled callable loses its instance binding and
+        # resolves to the unbound class method instead.
+        _jobstores = {}
 
         self.scheduler = BackgroundScheduler(
             timezone="America/New_York",
