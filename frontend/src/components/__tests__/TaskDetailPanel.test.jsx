@@ -32,6 +32,7 @@ vi.mock('../../utils/sanitize', () => ({
 vi.mock('../../services/api', () => ({
   aiAPI: {
     submitTrainingInstruction: vi.fn().mockResolvedValue({ acknowledgment: 'Training received!' }),
+    getTrainingInstructions: vi.fn().mockResolvedValue({ instructions: [] }),
   },
   API_BASE_URL: 'http://localhost:8000',
 }));
@@ -123,7 +124,8 @@ describe('TaskDetailPanel', () => {
   it('shows the source and owner information', () => {
     render(<TaskDetailPanel task={baseTask} {...defaultHandlers} />);
 
-    expect(screen.getByText('Workflow')).toBeInTheDocument();
+    // "Workflow" appears twice: the header source-name and the Source detail value
+    expect(screen.getAllByText('Workflow').length).toBeGreaterThan(0);
     expect(screen.getByText('Jane Agent')).toBeInTheDocument();
   });
 

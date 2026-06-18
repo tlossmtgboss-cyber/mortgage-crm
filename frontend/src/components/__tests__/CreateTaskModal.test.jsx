@@ -17,16 +17,36 @@ vi.mock('../../utils/toast', () => ({
   },
 }));
 
-// Mock api client
-const mockPost = vi.fn();
-vi.mock('../../utils/api/client', () => ({
-  api: {
-    post: (...args) => mockPost(...args),
-  },
+// Mock api client (canonical services/api/client apiRequest)
+const mockApiRequest = vi.fn();
+vi.mock('../../services/api/client', () => ({
+  apiRequest: (...args) => mockApiRequest(...args),
 }));
 
 import CreateTaskModal from '../CreateTaskModal';
 import { toast } from '../../utils/toast';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+//
+// The component renders labels (<label className="form-label">...) that are NOT
+// associated with their inputs via htmlFor/id, so `getByLabelText` does not work.
+// We query the controls directly by placeholder / type / role instead.
+
+const getTitleInput = () =>
+  screen.getByPlaceholderText(/follow up on application/i);
+const getDescriptionInput = () =>
+  screen.getByPlaceholderText(/add details about the task/i);
+const getDueDateInput = (container) =>
+  container.querySelector('input[type="date"]');
+const getPrioritySelect = (container) =>
+  container.querySelector('select.form-select');
+
+// "Create Task" text appears in BOTH the heading and the submit button, so
+// target the submit button specifically by role.
+const getSubmitButton = () =>
+  screen.getByRole('button', { name: /create task/i });
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -46,7 +66,7 @@ const defaultProps = {
 describe('CreateTaskModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockPost.mockResolvedValue({ id: 'new-task-1', title: 'Test Task' });
+    mockApiRequest.mockResolvedValue({ id: 'new-task-1', title: 'Test Task' });
   });
 
   // -- 1. Returns null when not open --
@@ -59,13 +79,20 @@ describe('CreateTaskModal', () => {
 
   // -- 2. Renders modal when open --
   it('renders the modal with title and form fields when open', () => {
-    render(<CreateTaskModal {...defaultProps} />);
+    const { container } = render(<CreateTaskModal {...defaultProps} />);
 
-    expect(screen.getByText('Create Task')).toBeInTheDocument();
-    expect(screen.getByLabelText(/task title/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/due date/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/priority/i)).toBeInTheDocument();
+    // "Create Task" appears twice (heading + submit button); target the heading.
+    expect(
+      screen.getByRole('heading', { name: 'Create Task' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Task Title *')).toBeInTheDocument();
+    expect(getTitleInput()).toBeInTheDocument();
+    expect(screen.getByText('Description')).toBeInTheDocument();
+    expect(getDescriptionInput()).toBeInTheDocument();
+    expect(screen.getByText('Due Date')).toBeInTheDocument();
+    expect(getDueDateInput(container)).toBeInTheDocument();
+    expect(screen.getByText('Priority')).toBeInTheDocument();
+    expect(getPrioritySelect(container)).toBeInTheDocument();
   });
 
   // -- 3. Shows lead info when lead is provided --
@@ -80,9 +107,8 @@ describe('CreateTaskModal', () => {
   it('shows error message when submitting without a title', async () => {
     render(<CreateTaskModal {...defaultProps} />);
 
-    const submitBtn = screen.getByText('Create Task');
     // Submit button should be disabled when title is empty
-    expect(submitBtn).toBeDisabled();
+    expect(getSubmitButton()).toBeDisabled();
   });
 
   // -- 5. Shows validation error on empty title submit --
@@ -90,12 +116,10 @@ describe('CreateTaskModal', () => {
     render(<CreateTaskModal {...defaultProps} />);
 
     // Type only whitespace
-    const titleInput = screen.getByLabelText(/task title/i);
-    fireEvent.change(titleInput, { target: { value: '   ' } });
+    fireEvent.change(getTitleInput(), { target: { value: '   ' } });
 
-    const submitBtn = screen.getByText('Create Task');
     // Button should still be disabled for whitespace-only
-    expect(submitBtn).toBeDisabled();
+    expect(getSubmitButton()).toBeDisabled();
   });
 
   // -- 6. Successful task creation --
@@ -103,25 +127,27 @@ describe('CreateTaskModal', () => {
     render(<CreateTaskModal {...defaultProps} />);
 
     // Fill in the form
-    fireEvent.change(screen.getByLabelText(/task title/i), {
+    fireEvent.change(getTitleInput(), {
       target: { value: 'Follow up with borrower' },
     });
-    fireEvent.change(screen.getByLabelText(/description/i), {
+    fireEvent.change(getDescriptionInput(), {
       target: { value: 'Check on document status' },
     });
 
     // Submit
-    const submitBtn = screen.getByText('Create Task');
     await act(async () => {
-      fireEvent.click(submitBtn);
+      fireEvent.click(getSubmitButton());
     });
 
     await waitFor(() => {
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/tasks', {
-        title: 'Follow up with borrower',
-        description: 'Check on document status',
-        priority: 'medium',
-        lead_id: 'lead-1',
+      expect(mockApiRequest).toHaveBeenCalledWith('/api/v1/tasks', {
+        method: 'POST',
+        data: {
+          title: 'Follow up with borrower',
+          description: 'Check on document status',
+          priority: 'medium',
+          lead_id: 'lead-1',
+        },
       });
     });
 
@@ -135,9 +161,9 @@ describe('CreateTaskModal', () => {
 
   // -- 7. Priority selection --
   it('allows selecting different priority levels', () => {
-    render(<CreateTaskModal {...defaultProps} />);
+    const { container } = render(<CreateTaskModal {...defaultProps} />);
 
-    const prioritySelect = screen.getByLabelText(/priority/i);
+    const prioritySelect = getPrioritySelect(container);
 
     // Default should be medium
     expect(prioritySelect.value).toBe('medium');
@@ -153,25 +179,27 @@ describe('CreateTaskModal', () => {
 
   // -- 8. Due date is sent as ISO string --
   it('converts due date to ISO string before sending', async () => {
-    render(<CreateTaskModal {...defaultProps} />);
+    const { container } = render(<CreateTaskModal {...defaultProps} />);
 
-    fireEvent.change(screen.getByLabelText(/task title/i), {
+    fireEvent.change(getTitleInput(), {
       target: { value: 'Task with due date' },
     });
-    fireEvent.change(screen.getByLabelText(/due date/i), {
+    fireEvent.change(getDueDateInput(container), {
       target: { value: '2026-04-01' },
     });
 
-    const submitBtn = screen.getByText('Create Task');
     await act(async () => {
-      fireEvent.click(submitBtn);
+      fireEvent.click(getSubmitButton());
     });
 
     await waitFor(() => {
-      expect(mockPost).toHaveBeenCalledWith(
+      expect(mockApiRequest).toHaveBeenCalledWith(
         '/api/v1/tasks',
         expect.objectContaining({
-          due_date: expect.stringContaining('2026-04-01'),
+          method: 'POST',
+          data: expect.objectContaining({
+            due_date: expect.stringContaining('2026-04-01'),
+          }),
         })
       );
     });
@@ -179,17 +207,16 @@ describe('CreateTaskModal', () => {
 
   // -- 9. Handles API error gracefully --
   it('shows error message when API call fails', async () => {
-    mockPost.mockRejectedValue(new Error('Server error'));
+    mockApiRequest.mockRejectedValue(new Error('Server error'));
 
     render(<CreateTaskModal {...defaultProps} />);
 
-    fireEvent.change(screen.getByLabelText(/task title/i), {
+    fireEvent.change(getTitleInput(), {
       target: { value: 'Failing task' },
     });
 
-    const submitBtn = screen.getByText('Create Task');
     await act(async () => {
-      fireEvent.click(submitBtn);
+      fireEvent.click(getSubmitButton());
     });
 
     await waitFor(() => {
@@ -206,7 +233,7 @@ describe('CreateTaskModal', () => {
   it('closes the modal when cancel button is clicked', () => {
     render(<CreateTaskModal {...defaultProps} />);
 
-    const cancelBtn = screen.getByText('Cancel');
+    const cancelBtn = screen.getByRole('button', { name: 'Cancel' });
     fireEvent.click(cancelBtn);
 
     expect(defaultProps.onClose).toHaveBeenCalled();
@@ -214,9 +241,9 @@ describe('CreateTaskModal', () => {
 
   // -- 11. Overlay click closes the modal --
   it('closes the modal when clicking the overlay backdrop', () => {
-    render(<CreateTaskModal {...defaultProps} />);
+    const { container } = render(<CreateTaskModal {...defaultProps} />);
 
-    const overlay = screen.getByText('Create Task').closest('.modal-overlay');
+    const overlay = container.querySelector('.modal-overlay');
     fireEvent.click(overlay);
 
     expect(defaultProps.onClose).toHaveBeenCalled();
@@ -226,17 +253,16 @@ describe('CreateTaskModal', () => {
   it('disables submit button and shows "Creating..." while submitting', async () => {
     // Make API call hang
     let resolvePost;
-    mockPost.mockReturnValue(new Promise((resolve) => { resolvePost = resolve; }));
+    mockApiRequest.mockReturnValue(new Promise((resolve) => { resolvePost = resolve; }));
 
     render(<CreateTaskModal {...defaultProps} />);
 
-    fireEvent.change(screen.getByLabelText(/task title/i), {
+    fireEvent.change(getTitleInput(), {
       target: { value: 'Slow task' },
     });
 
-    const submitBtn = screen.getByText('Create Task');
     await act(async () => {
-      fireEvent.click(submitBtn);
+      fireEvent.click(getSubmitButton());
     });
 
     // Should show "Creating..." while in progress

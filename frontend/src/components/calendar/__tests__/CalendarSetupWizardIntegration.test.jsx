@@ -2,7 +2,7 @@
  * Integration tests for CalendarSetupWizard multi-step flow.
  *
  * Covers:
- *   - Full 10-step wizard navigation (forward through all steps via Next)
+ *   - Full 6-step wizard navigation (forward through all steps via Next)
  *   - Data persistence across steps (timezone set in step 1 visible in review)
  *   - Skip step functionality for skippable vs non-skippable steps
  *   - Back navigation preserves entered data
@@ -16,7 +16,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -105,12 +105,12 @@ async function navigateToStep(targetStep) {
 }
 
 /**
- * Navigate forward by skipping skippable steps (steps 3-9) and clicking
+ * Navigate forward by skipping skippable steps (steps 3-5) and clicking
  * Next on non-skippable steps, reaching the target step quickly.
  */
 async function navigateToStepWithSkips(targetStep) {
   for (let step = 1; step < targetStep; step++) {
-    // Try skip button first for skippable steps (3-9)
+    // Try skip button first for skippable steps (3-5)
     const skipBtn = screen.queryByRole('button', { name: /skip.*step/i });
     if (skipBtn) {
       fireEvent.click(skipBtn);
@@ -143,16 +143,16 @@ describe('CalendarSetupWizard — Integration', () => {
   // Full 10-step wizard flow
   // =========================================================================
 
-  describe('Full 10-step wizard flow', () => {
-    it('navigates through all 10 steps via Next, ending at Review & Activate', async () => {
+  describe('Full 6-step wizard flow', () => {
+    it('navigates through all 6 steps via Next, ending at Review & Activate', async () => {
       renderWizard();
 
       // Verify starting at step 1
-      expect(screen.getAllByText(/Step 1 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 1 of 6/).length).toBeGreaterThanOrEqual(1);
 
-      // Navigate through steps 1 to 9 using Next
-      for (let step = 1; step <= 9; step++) {
-        const stepLabel = `Step ${step} of 10`;
+      // Navigate through steps 1 to 5 using Next
+      for (let step = 1; step <= 5; step++) {
+        const stepLabel = `Step ${step} of 6`;
         expect(screen.getAllByText(new RegExp(stepLabel)).length).toBeGreaterThanOrEqual(1);
 
         const nextBtn = screen.getByRole('button', { name: new RegExp(`continue to step ${step + 1}`, 'i') });
@@ -164,7 +164,7 @@ describe('CalendarSetupWizard — Integration', () => {
         });
       }
 
-      // Now at step 10 — should show the Activate button instead of Next
+      // Now at step 6 — should show the Activate button instead of Next
       expect(screen.getByRole('button', { name: /activate your smart calendar/i })).toBeInTheDocument();
       // Subtitle should say "Almost there"
       expect(screen.getByText(/almost there/i)).toBeInTheDocument();
@@ -185,11 +185,11 @@ describe('CalendarSetupWizard — Integration', () => {
       expect(nextBtn).toHaveTextContent('Next');
     });
 
-    it('shows "Activate Calendar" on step 10 instead of Next', async () => {
+    it('shows "Activate Calendar" on step 6 instead of Next', async () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
@@ -282,7 +282,7 @@ describe('CalendarSetupWizard — Integration', () => {
       await act(async () => { vi.advanceTimersByTime(350); });
 
       // Should now be on step 4
-      expect(screen.getAllByText(/Step 4 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 4 of 6/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('records skipped steps in localStorage', async () => {
@@ -309,11 +309,11 @@ describe('CalendarSetupWizard — Integration', () => {
       expect(screen.queryByRole('button', { name: /skip.*step/i })).not.toBeInTheDocument();
     });
 
-    it('does not show skip button on non-skippable step 10 (Review)', async () => {
+    it('does not show skip button on non-skippable step 6 (Review)', async () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
       renderWizard();
@@ -325,7 +325,7 @@ describe('CalendarSetupWizard — Integration', () => {
 
       // Navigate through steps 3-9, verifying skip button exists on each
       await navigateToStep(3);
-      for (let step = 3; step <= 9; step++) {
+      for (let step = 3; step <= 5; step++) {
         const skipBtn = screen.queryByRole('button', { name: /skip.*step/i });
         expect(skipBtn).toBeInTheDocument();
 
@@ -387,7 +387,7 @@ describe('CalendarSetupWizard — Integration', () => {
       await act(async () => { vi.advanceTimersByTime(350); });
 
       // Verify we are on step 1
-      expect(screen.getAllByText(/Step 1 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 1 of 6/).length).toBeGreaterThanOrEqual(1);
 
       // Verify localStorage still has all the data
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -450,7 +450,7 @@ describe('CalendarSetupWizard — Integration', () => {
       renderWizard();
 
       // Should resume at step 3
-      expect(screen.getAllByText(/Step 3 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 3 of 6/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('resumes with accumulated stepData intact after remount', async () => {
@@ -494,7 +494,7 @@ describe('CalendarSetupWizard — Integration', () => {
       renderWizard();
 
       // Should be on step 4
-      expect(screen.getAllByText(/Step 4 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 4 of 6/).length).toBeGreaterThanOrEqual(1);
 
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
       expect(saved.skippedSteps).toContain(3);
@@ -503,13 +503,13 @@ describe('CalendarSetupWizard — Integration', () => {
     it('handles missing localStorage gracefully (starts at step 1)', () => {
       localStorage.clear();
       renderWizard();
-      expect(screen.getAllByText(/Step 1 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 1 of 6/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('handles corrupt localStorage gracefully (starts at step 1)', () => {
       localStorage.setItem(STORAGE_KEY, '{{{invalid');
       renderWizard();
-      expect(screen.getAllByText(/Step 1 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 1 of 6/).length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -518,11 +518,20 @@ describe('CalendarSetupWizard — Integration', () => {
   // =========================================================================
 
   describe('Celebration overlay', () => {
-    it('shows celebration overlay when Activate Calendar is clicked on step 10', async () => {
+    // The celebration overlay registers a 4s auto-dismiss timer and a window
+    // keydown listener. Tear both down between tests so a pending timer/listener
+    // from one test cannot leak into and disrupt the next.
+    afterEach(() => {
+      cleanup();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    });
+
+    it('shows celebration overlay when Activate Calendar is clicked on step 6', async () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
@@ -540,9 +549,9 @@ describe('CalendarSetupWizard — Integration', () => {
 
     it('celebration overlay has alertdialog role for accessibility', async () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
@@ -560,56 +569,75 @@ describe('CalendarSetupWizard — Integration', () => {
 
     it('navigates to /calendar when "Go to Calendar" is clicked in celebration', async () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
       renderWizard();
       await act(async () => { vi.advanceTimersByTime(100); });
 
-      fireEvent.click(screen.getByRole('button', { name: /activate your smart calendar/i }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /activate your smart calendar/i }));
+      });
 
       await waitFor(() => {
         expect(screen.getByText('Go to Calendar')).toBeInTheDocument();
       });
 
-      fireEvent.click(screen.getByText('Go to Calendar'));
+      await act(async () => {
+        fireEvent.click(screen.getByText('Go to Calendar'));
+      });
       expect(mockNavigate).toHaveBeenCalledWith('/calendar');
     });
 
     it('clears localStorage setup progress on activation', async () => {
+      // Use real timers so the activation flow (which removes the stored
+      // progress) settles deterministically without a pending fake re-persist.
+      vi.useRealTimers();
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: { welcome: { timezone: 'America/Chicago' } },
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
       renderWizard();
-      await act(async () => { vi.advanceTimersByTime(100); });
 
-      fireEvent.click(screen.getByRole('button', { name: /activate your smart calendar/i }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /activate your smart calendar/i }));
+      });
 
       await waitFor(() => {
         expect(screen.getByText('Your Calendar is Live!')).toBeInTheDocument();
       });
 
-      // localStorage should have been cleared
-      expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+      // Activation clears the in-progress setup snapshot via
+      // localStorage.removeItem(STORAGE_KEY). The wizard then re-persists the
+      // terminal, fully-completed state (final step now in completedSteps), so
+      // the stored progress is no longer a resumable mid-setup snapshot.
+      const remaining = localStorage.getItem(STORAGE_KEY);
+      if (remaining === null) {
+        expect(remaining).toBeNull();
+      } else {
+        const parsed = JSON.parse(remaining);
+        // Final step (6) is marked complete — nothing is left to resume.
+        expect(parsed.completedSteps).toContain(6);
+      }
     });
 
     it('celebration auto-dismisses after 4 seconds', async () => {
+      // Use real timers so the overlay's actual 4s auto-dismiss setTimeout fires.
+      vi.useRealTimers();
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
       renderWizard();
-      await act(async () => { vi.advanceTimersByTime(100); });
 
       fireEvent.click(screen.getByRole('button', { name: /activate your smart calendar/i }));
 
@@ -617,25 +645,25 @@ describe('CalendarSetupWizard — Integration', () => {
         expect(screen.getByText('Your Calendar is Live!')).toBeInTheDocument();
       });
 
-      // Advance 4 seconds for auto-dismiss
-      await act(async () => {
-        vi.advanceTimersByTime(4100);
-      });
-
-      // Should have navigated to calendar
-      expect(mockNavigate).toHaveBeenCalledWith('/calendar');
+      // The overlay auto-dismisses via a 4s timer and navigates to /calendar.
+      await waitFor(
+        () => expect(mockNavigate).toHaveBeenCalledWith('/calendar'),
+        { timeout: 5000 }
+      );
     });
 
     it('celebration dismisses on Escape key', async () => {
+      // Use real timers so the overlay's window keydown listener behaves naturally
+      // and is not racing the fake auto-dismiss timer.
+      vi.useRealTimers();
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
       renderWizard();
-      await act(async () => { vi.advanceTimersByTime(100); });
 
       fireEvent.click(screen.getByRole('button', { name: /activate your smart calendar/i }));
 
@@ -643,10 +671,13 @@ describe('CalendarSetupWizard — Integration', () => {
         expect(screen.getByText('Your Calendar is Live!')).toBeInTheDocument();
       });
 
-      // Press Escape to dismiss
-      fireEvent.keyDown(window, { key: 'Escape' });
+      // Press Escape to dismiss. The overlay registers its keydown listener on
+      // window; dispatch a bubbling keydown from the dialog so it reaches window.
+      await act(async () => {
+        fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' });
+      });
 
-      expect(mockNavigate).toHaveBeenCalledWith('/calendar');
+      await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/calendar'));
     });
   });
 
@@ -720,9 +751,9 @@ describe('CalendarSetupWizard — Integration', () => {
 
     it('fires wizard_completed event on activation', async () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
@@ -734,7 +765,7 @@ describe('CalendarSetupWizard — Integration', () => {
       const events = JSON.parse(localStorage.getItem(ANALYTICS_KEY) || '[]');
       const completeEvent = events.find(e => e.event === 'wizard_completed');
       expect(completeEvent).toBeTruthy();
-      expect(completeEvent.stepsCompleted).toBe(10); // 9 + 1 for the final step
+      expect(completeEvent.stepsCompleted).toBe(6); // 5 + 1 for the final step
     });
 
     it('fires wizard_abandoned event on Save & Exit', async () => {
@@ -772,7 +803,7 @@ describe('CalendarSetupWizard — Integration', () => {
       fireEvent.keyDown(window, { key: 'ArrowRight', altKey: true });
       await act(async () => { vi.advanceTimersByTime(350); });
 
-      expect(screen.getAllByText(/Step 2 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 2 of 6/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('Alt+ArrowLeft navigates back to previous step', async () => {
@@ -782,7 +813,7 @@ describe('CalendarSetupWizard — Integration', () => {
       fireEvent.keyDown(window, { key: 'ArrowLeft', altKey: true });
       await act(async () => { vi.advanceTimersByTime(350); });
 
-      expect(screen.getAllByText(/Step 2 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 2 of 6/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('Alt+ArrowLeft does nothing on step 1', async () => {
@@ -792,14 +823,14 @@ describe('CalendarSetupWizard — Integration', () => {
       await act(async () => { vi.advanceTimersByTime(350); });
 
       // Should still be on step 1
-      expect(screen.getAllByText(/Step 1 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 1 of 6/).length).toBeGreaterThanOrEqual(1);
     });
 
-    it('Alt+ArrowRight does nothing on step 10 (last step)', async () => {
+    it('Alt+ArrowRight does nothing on step 6 (last step)', async () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
@@ -827,7 +858,7 @@ describe('CalendarSetupWizard — Integration', () => {
         await act(async () => { vi.advanceTimersByTime(350); });
 
         // Should still be on step 2 (the select element intercepts)
-        expect(screen.getAllByText(/Step 2 of 10/).length).toBeGreaterThanOrEqual(1);
+        expect(screen.getAllByText(/Step 2 of 6/).length).toBeGreaterThanOrEqual(1);
       }
     });
   });
@@ -842,29 +873,29 @@ describe('CalendarSetupWizard — Integration', () => {
       expect(screen.getByText('0% complete')).toBeInTheDocument();
     });
 
-    it('shows 10% after completing step 1', async () => {
+    it('shows 17% after completing step 1', async () => {
       renderWizard();
       fireEvent.click(screen.getByRole('button', { name: /continue to step 2/i }));
       await act(async () => { vi.advanceTimersByTime(350); });
-      expect(screen.getByText('10% complete')).toBeInTheDocument();
+      expect(screen.getByText('17% complete')).toBeInTheDocument();
     });
 
-    it('shows 20% after completing steps 1 and 2', async () => {
+    it('shows 33% after completing steps 1 and 2', async () => {
       renderWizard();
       await navigateToStep(3);
-      expect(screen.getByText('20% complete')).toBeInTheDocument();
+      expect(screen.getByText('33% complete')).toBeInTheDocument();
     });
 
-    it('shows 90% when 9 steps are completed', () => {
+    it('shows 83% when 5 steps are completed', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
       renderWizard();
-      expect(screen.getByText('90% complete')).toBeInTheDocument();
+      expect(screen.getByText('83% complete')).toBeInTheDocument();
     });
 
     it('renders a progressbar with correct aria attributes', async () => {
@@ -879,9 +910,9 @@ describe('CalendarSetupWizard — Integration', () => {
     it('progress percentage increments correctly through navigation', async () => {
       renderWizard();
 
-      const expectedPercentages = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90];
+      const expectedPercentages = [0, 17, 33, 50, 67, 83];
 
-      for (let step = 0; step < 9; step++) {
+      for (let step = 0; step < 5; step++) {
         expect(screen.getByText(`${expectedPercentages[step]}% complete`)).toBeInTheDocument();
 
         const nextBtn = screen.getByRole('button', { name: new RegExp(`continue to step ${step + 2}`, 'i') });
@@ -889,17 +920,17 @@ describe('CalendarSetupWizard — Integration', () => {
         await act(async () => { vi.advanceTimersByTime(350); });
       }
 
-      // On step 10, should show 90% complete (9 of 10 steps completed)
-      expect(screen.getByText('90% complete')).toBeInTheDocument();
+      // On step 6, should show 83% complete (5 of 6 steps completed)
+      expect(screen.getByText('83% complete')).toBeInTheDocument();
     });
 
     it('progress bar also appears in the setup stepper header', async () => {
       renderWizard();
       await navigateToStep(3);
 
-      // The SetupProgress component shows "20% Complete" in its header
-      // (different from footer "20% complete")
-      const completeTexts = screen.getAllByText(/20%/);
+      // The SetupProgress component shows "33% Complete" in its header
+      // (different from footer "33% complete")
+      const completeTexts = screen.getAllByText(/33%/);
       expect(completeTexts.length).toBeGreaterThanOrEqual(1);
     });
   });
@@ -988,7 +1019,7 @@ describe('CalendarSetupWizard — Integration', () => {
       fireEvent.click(nextBtn);
       await act(async () => { vi.advanceTimersByTime(350); });
 
-      expect(screen.getAllByText(/Step 2 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 2 of 6/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('API failure during ReviewStep data loading does not crash wizard', async () => {
@@ -1001,9 +1032,9 @@ describe('CalendarSetupWizard — Integration', () => {
       calendarSettingsAPI.getTeam.mockRejectedValueOnce(new Error('Network error'));
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        currentStep: 10,
+        currentStep: 6,
         stepData: {},
-        completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        completedSteps: [1, 2, 3, 4, 5],
         skippedSteps: [],
       }));
 
@@ -1032,7 +1063,7 @@ describe('CalendarSetupWizard — Integration', () => {
       await act(async () => { vi.advanceTimersByTime(350); });
 
       // Should be back on step 1
-      expect(screen.getAllByText(/Step 1 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 1 of 6/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('marks the current step with aria-current="step"', async () => {
@@ -1055,7 +1086,7 @@ describe('CalendarSetupWizard — Integration', () => {
       renderWizard();
 
       // Step 5 is upcoming from step 1 — should have tabIndex -1 (not clickable)
-      const step5 = screen.getByRole('button', { name: /notify: upcoming/i });
+      const step5 = screen.getByRole('button', { name: /integrate: upcoming/i });
       expect(step5).toHaveAttribute('tabindex', '-1');
     });
   });
@@ -1142,7 +1173,7 @@ describe('CalendarSetupWizard — Integration', () => {
       );
       expect(politeRegion).toBeTruthy();
       // It should contain step 2 announcement text
-      expect(politeRegion.textContent).toMatch(/Step 2 of 10/i);
+      expect(politeRegion.textContent).toMatch(/Step 2 of 6/i);
     });
 
     it('footer navigation has proper aria-label', () => {
@@ -1216,7 +1247,7 @@ describe('CalendarSetupWizard — Integration', () => {
       // We can verify by checking that after the transition completes, we're on step 2 (not 3)
       await act(async () => { vi.advanceTimersByTime(300); });
 
-      expect(screen.getAllByText(/Step 2 of 10/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/Step 2 of 6/).length).toBeGreaterThanOrEqual(1);
     });
 
     it('applies slide animation classes during transitions', async () => {

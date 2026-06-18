@@ -114,8 +114,10 @@ export default function ConsentGateBanner({
   errorMessage,
   canManualOverride,
   canRetry,
+  canPlayDisclosure,
   onConfirmVerbalDisclosure,
   onRetryDisclosure,
+  onPlayDisclosure,
 }) {
   const [visible, setVisible] = useState(true);
   const [dismissing, setDismissing] = useState(false);
@@ -224,7 +226,15 @@ export default function ConsentGateBanner({
             the borrower that this call is being recorded.
           </p>
           <div style={baseStyles.buttonRow}>
-            {canRetry && (
+            {canPlayDisclosure && (
+              <button
+                style={baseStyles.button(COLORS.blue)}
+                onClick={onPlayDisclosure}
+              >
+                ▶ Play Disclosure
+              </button>
+            )}
+            {canRetry && !canPlayDisclosure && (
               <button
                 style={baseStyles.button(COLORS.blue)}
                 onClick={onRetryDisclosure}
@@ -267,7 +277,15 @@ export default function ConsentGateBanner({
             and could not be played.
           </p>
           <div style={baseStyles.buttonRow}>
-            {canRetry && (
+            {canPlayDisclosure && (
+              <button
+                style={baseStyles.button(COLORS.blue)}
+                onClick={onPlayDisclosure}
+              >
+                ▶ Play Disclosure
+              </button>
+            )}
+            {canRetry && !canPlayDisclosure && (
               <button
                 style={baseStyles.button(COLORS.blue)}
                 onClick={onRetryDisclosure}

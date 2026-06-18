@@ -13,6 +13,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import api from '../services/api';
 
 export const SESSION_STATES = {
   IDLE: 'idle',
@@ -71,6 +72,8 @@ export function useCallIntelligenceSession({
 }) {
   const [sessionState, setSessionState] = useState(SESSION_STATES.IDLE);
   const [sessionId, setSessionId] = useState(null);
+  const [disclosureAudioUrl, setDisclosureAudioUrl] = useState(null);
+  const [disclosureText, setDisclosureText] = useState(null);
   const [consentInfo, setConsentInfo] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [agentStatuses, setAgentStatuses] = useState({});
@@ -78,6 +81,7 @@ export function useCallIntelligenceSession({
   const [transcript, setTranscript] = useState([]);
   const [duration, setDuration] = useState(0);
   const [wsConnected, setWsConnected] = useState(false);
+  const [diagnostics, setDiagnostics] = useState(null);
 
   const wsRef = useRef(null);
   const timeoutRef = useRef(null);
@@ -88,6 +92,10 @@ export function useCallIntelligenceSession({
   const sessionStateRef = useRef(sessionState);
   const sessionIdRef = useRef(null);
   const callbacksRef = useRef({ onConsentCleared, onSessionActive, onError });
+  // Audio queued while the WS is CONNECTING (~5s worth), flushed on open.
+  const pendingAudioRef = useRef([]);
+  const droppedChunksRef = useRef(0);
+  const sentChunksRef = useRef(0);
 
   sessionStateRef.current = sessionState;
   sessionIdRef.current = sessionId;
@@ -102,6 +110,9 @@ export function useCallIntelligenceSession({
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
+      }
+      if (typeof window.speechSynthesis !== 'undefined') {
+        window.speechSynthesis.cancel();
       }
     };
   }, []);
@@ -120,7 +131,14 @@ export function useCallIntelligenceSession({
   }, [sessionState]);
 
   const _attachWsHandlers = useCallback((ws, sessId) => {
-    ws.onopen = () => setWsConnected(true);
+    ws.onopen = () => {
+      setWsConnected(true);
+      const queued = pendingAudioRef.current.splice(0);
+      for (const data of queued) {
+        ws.send(JSON.stringify({ type: 'audio_chunk', data }));
+      }
+      if (queued.length) console.info(`[CI] Flushed ${queued.length} buffered audio chunks`);
+    };
 
     ws.onmessage = (event) => {
       try {
@@ -201,6 +219,12 @@ export function useCallIntelligenceSession({
             break;
           }
 
+          case 'pipeline_status': {
+            const { event: _evt, ...status } = data;
+            setDiagnostics((prev) => ({ ...(prev || {}), ...status }));
+            break;
+          }
+
           case 'call_status':
             if (data.status === 'completed') {
               setSessionState(SESSION_STATES.COMPLETED);
@@ -248,46 +272,64 @@ export function useCallIntelligenceSession({
     return () => ws.close();
   }, [sessionId, websocketUrl, _attachWsHandlers]);
 
-  const _playBrowserDisclosure = useCallback(
-    async (audioUrl, sessId) => {
-      return new Promise((resolve, reject) => {
-        const audio = new Audio(audioUrl);
-        audioRef.current = audio;
-
-        audio.onended = async () => {
-          audioRef.current = null;
-          try {
-            const resp = await fetch(
-              '/api/v1/call-intelligence/session/confirm-browser-disclosure',
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: sessId }),
-              }
-            );
-            if (resp.ok) {
-              resolve();
-            } else {
-              const err = await resp.json();
-              reject(new Error(err.detail || 'Browser disclosure confirmation failed'));
-            }
-          } catch (e) {
-            reject(e);
-          }
-        };
-
-        audio.onerror = () => {
-          audioRef.current = null;
-          reject(new Error('Failed to play disclosure audio'));
-        };
-
-        audio.play().catch((e) => {
-          audioRef.current = null;
-          reject(new Error(`Audio play blocked: ${e.message}. Tap to allow audio.`));
-        });
+  const _playAudioFile = useCallback((audioUrl) => {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      audio.onended = () => {
+        audioRef.current = null;
+        resolve();
+      };
+      audio.onerror = () => {
+        audioRef.current = null;
+        reject(new Error('Disclosure audio could not be loaded'));
+      };
+      audio.play().catch((e) => {
+        audioRef.current = null;
+        reject(new Error(`Audio play blocked: ${e.message}`));
       });
+    });
+  }, []);
+
+  const _speakDisclosure = useCallback((text, causeErr) => {
+    return new Promise((resolve, reject) => {
+      if (!text || typeof window.speechSynthesis === 'undefined') {
+        reject(new Error(
+          `${causeErr?.message || 'Disclosure audio unavailable'}. Tap to allow audio.`
+        ));
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.onend = () => resolve();
+      utterance.onerror = () => reject(new Error(
+        `${causeErr?.message || 'Disclosure audio unavailable'} and speech synthesis failed. Tap to retry.`
+      ));
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    });
+  }, []);
+
+  const _playBrowserDisclosure = useCallback(
+    async (audioUrl, sessId, fallbackText) => {
+      try {
+        if (!audioUrl) throw new Error('No disclosure audio configured');
+        await _playAudioFile(audioUrl);
+      } catch (audioErr) {
+        // Asset missing/unsupported or autoplay blocked — speak the
+        // disclosure with on-device TTS so consent can still be satisfied.
+        await _speakDisclosure(fallbackText, audioErr);
+      }
+      try {
+        await api.post(
+          '/api/v1/call-intelligence/session/confirm-browser-disclosure',
+          { session_id: sessId }
+        );
+      } catch (e) {
+        throw new Error(e.detail || e.message || 'Browser disclosure confirmation failed');
+      }
     },
-    []
+    [_playAudioFile, _speakDisclosure]
   );
 
   const startSession = useCallback(async () => {
@@ -300,24 +342,15 @@ export function useCallIntelligenceSession({
     try {
       const isBrowserMode = !callControlId;
 
-      const response = await fetch('/api/v1/call-intelligence/session/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          call_control_id: callControlId || null,
-          contact_id: contactId || null,
-          borrower_state: borrowerState || null,
-          loan_officer_id: loanOfficerId || null,
-          is_browser_mode: isBrowserMode,
-        }),
+      const response = await api.post('/api/v1/call-intelligence/session/start', {
+        call_control_id: callControlId || null,
+        contact_id: contactId || null,
+        borrower_state: borrowerState || null,
+        loan_officer_id: loanOfficerId || null,
+        is_browser_mode: isBrowserMode,
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'Failed to start session');
-      }
-
-      const data = await response.json();
+      const data = response.data;
       setSessionId(data.session_id);
 
       setConsentInfo({
@@ -328,11 +361,13 @@ export function useCallIntelligenceSession({
         message: data.message,
       });
 
-      if (data.consent_status === 'browser_pending' && data.disclosure_audio_url) {
+      if (data.consent_status === 'browser_pending' && (data.disclosure_audio_url || data.disclosure_text)) {
+        setDisclosureAudioUrl(data.disclosure_audio_url || null);
+        setDisclosureText(data.disclosure_text || null);
         setSessionState(SESSION_STATES.PLAYING_DISCLOSURE);
 
         try {
-          await _playBrowserDisclosure(data.disclosure_audio_url, data.session_id);
+          await _playBrowserDisclosure(data.disclosure_audio_url, data.session_id, data.disclosure_text);
           setSessionState(SESSION_STATES.ACTIVE);
           setConsentInfo((prev) => ({
             ...prev,
@@ -382,7 +417,7 @@ export function useCallIntelligenceSession({
 
     } catch (err) {
       setSessionState(SESSION_STATES.ERROR);
-      setErrorMessage(err.message);
+      setErrorMessage(err.detail || err.message || 'Failed to start session');
       callbacksRef.current.onError?.(err);
     }
   }, [callControlId, contactId, borrowerState, loanOfficerId, _playBrowserDisclosure]);
@@ -394,27 +429,20 @@ export function useCallIntelligenceSession({
     setErrorMessage(null);
 
     try {
-      const response = await fetch('/api/v1/call-intelligence/session/retry-disclosure', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId,
-          call_control_id: callControlId || null,
-          is_browser_mode: !callControlId,
-        }),
+      const response = await api.post('/api/v1/call-intelligence/session/retry-disclosure', {
+        session_id: sessionId,
+        call_control_id: callControlId || null,
+        is_browser_mode: !callControlId,
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'Retry failed');
-      }
+      const data = response.data;
 
-      const data = await response.json();
-
-      if (data.consent_status === 'browser_pending' && data.disclosure_audio_url) {
+      if (data.consent_status === 'browser_pending' && (data.disclosure_audio_url || data.disclosure_text)) {
+        setDisclosureAudioUrl(data.disclosure_audio_url || null);
+        setDisclosureText(data.disclosure_text || null);
         setSessionState(SESSION_STATES.PLAYING_DISCLOSURE);
         try {
-          await _playBrowserDisclosure(data.disclosure_audio_url, sessionId);
+          await _playBrowserDisclosure(data.disclosure_audio_url, sessionId, data.disclosure_text);
           setSessionState(SESSION_STATES.ACTIVE);
           setConsentInfo((prev) => ({ ...prev, status: CONSENT_STATUSES.DISCLOSED }));
           callbacksRef.current.onConsentCleared?.();
@@ -435,9 +463,29 @@ export function useCallIntelligenceSession({
       }
     } catch (err) {
       setSessionState(SESSION_STATES.CONSENT_FAILED);
-      setErrorMessage(err.message);
+      setErrorMessage(err.detail || err.message || 'Retry failed');
     }
   }, [sessionId, callControlId, _playBrowserDisclosure]);
+
+  // iOS blocks audio started after an async hop (the POST in startSession
+  // breaks the user-gesture chain). This replays the disclosure directly
+  // inside a tap handler, where Audio.play() is always allowed.
+  const playDisclosureManually = useCallback(async () => {
+    if ((!disclosureAudioUrl && !disclosureText) || !sessionIdRef.current) return;
+    setSessionState(SESSION_STATES.PLAYING_DISCLOSURE);
+    setErrorMessage(null);
+    try {
+      await _playBrowserDisclosure(disclosureAudioUrl, sessionIdRef.current, disclosureText);
+      setSessionState(SESSION_STATES.ACTIVE);
+      setConsentInfo((prev) => ({ ...prev, status: CONSENT_STATUSES.DISCLOSED }));
+      callbacksRef.current.onConsentCleared?.();
+      callbacksRef.current.onSessionActive?.(sessionIdRef.current);
+    } catch (audioErr) {
+      setSessionState(SESSION_STATES.CONSENT_FAILED);
+      setErrorMessage(audioErr.message);
+      setConsentInfo((prev) => ({ ...prev, status: CONSENT_STATUSES.FAILED }));
+    }
+  }, [disclosureAudioUrl, disclosureText, _playBrowserDisclosure]);
 
   const confirmVerbalDisclosure = useCallback(async () => {
     if (!sessionId) return;
@@ -448,19 +496,10 @@ export function useCallIntelligenceSession({
     }
 
     try {
-      const response = await fetch('/api/v1/call-intelligence/session/manual-consent-override', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId,
-          lo_confirmed_verbal_disclosure: true,
-        }),
+      await api.post('/api/v1/call-intelligence/session/manual-consent-override', {
+        session_id: sessionId,
+        lo_confirmed_verbal_disclosure: true,
       });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'Override failed');
-      }
 
       setSessionState(SESSION_STATES.ACTIVE);
       setConsentInfo((prev) => ({
@@ -471,16 +510,26 @@ export function useCallIntelligenceSession({
       callbacksRef.current.onConsentCleared?.();
       callbacksRef.current.onSessionActive?.(sessionIdRef.current);
     } catch (err) {
-      setErrorMessage(err.message);
+      setErrorMessage(err.detail || err.message || 'Override failed');
     }
   }, [sessionId, consentInfo]);
 
   const stopSession = useCallback(async () => {
+    let serverDiag = null;
     if (sessionId) {
-      await fetch(`/api/v1/call-intelligence/session/${sessionId}/stop`, {
-        method: 'POST',
-      }).catch(() => {});
+      try {
+        const resp = await api.post(`/api/v1/call-intelligence/session/${sessionId}/stop`);
+        serverDiag = resp.data?.diagnostics || null;
+      } catch (e) {
+        serverDiag = { stop_error: e.detail || e.message };
+      }
     }
+    setDiagnostics((prev) => ({
+      ...(prev || {}),
+      chunks_sent: sentChunksRef.current,
+      chunks_dropped: droppedChunksRef.current,
+      ...(serverDiag || { server: 'unreachable' }),
+    }));
     sessionStateRef.current = SESSION_STATES.COMPLETED;
     setSessionState(SESSION_STATES.COMPLETED);
     wsRef.current?.close();
@@ -488,6 +537,9 @@ export function useCallIntelligenceSession({
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
+    }
+    if (typeof window.speechSynthesis !== 'undefined') {
+      window.speechSynthesis.cancel();
     }
   }, [sessionId]);
 
@@ -502,11 +554,25 @@ export function useCallIntelligenceSession({
   }, []);
 
   const sendAudio = useCallback((base64Data) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'audio_chunk',
-        data: base64Data,
-      }));
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'audio_chunk', data: base64Data }));
+      sentChunksRef.current += 1;
+      return;
+    }
+    if (ws?.readyState === WebSocket.CONNECTING) {
+      if (pendingAudioRef.current.length < 60) {
+        pendingAudioRef.current.push(base64Data);
+      } else {
+        droppedChunksRef.current += 1;
+      }
+      return;
+    }
+    droppedChunksRef.current += 1;
+    if (droppedChunksRef.current % 20 === 1) {
+      console.warn(
+        `[CI] Dropped ${droppedChunksRef.current} audio chunks (WS state=${ws ? ws.readyState : 'none'})`
+      );
     }
   }, []);
 
@@ -520,6 +586,7 @@ export function useCallIntelligenceSession({
     transcript,
     duration,
     wsConnected,
+    diagnostics,
 
     isIdle: sessionState === SESSION_STATES.IDLE,
     isPlayingDisclosure: sessionState === SESSION_STATES.PLAYING_DISCLOSURE,
@@ -531,11 +598,17 @@ export function useCallIntelligenceSession({
       sessionState === SESSION_STATES.CONSENT_FAILED &&
       consentInfo?.requirement !== 'required',
     canRetry: sessionState === SESSION_STATES.CONSENT_FAILED,
+    canPlayDisclosure:
+      sessionState === SESSION_STATES.CONSENT_FAILED &&
+      (!!disclosureAudioUrl || !!disclosureText),
+    disclosureAudioUrl,
+    disclosureText,
 
     startSession,
     stopSession,
     retryDisclosure,
     confirmVerbalDisclosure,
+    playDisclosureManually,
     sendTranscript,
     sendAudio,
   };

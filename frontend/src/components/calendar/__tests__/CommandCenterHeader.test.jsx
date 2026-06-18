@@ -131,7 +131,10 @@ describe('CommandCenterHeader', () => {
       localStorage.setItem('user', JSON.stringify({ first_name: 'Timothy' }));
       resolveAllAPIs();
       renderHeader();
-      expect(screen.getByText(/Timothy/)).toBeInTheDocument();
+      // Greeting and name render as separate text nodes within the heading
+      // ("Good morning" + ", Timothy"), so match against the heading's textContent.
+      const heading = screen.getByRole('heading');
+      expect(heading.textContent).toContain('Timothy');
     });
 
     it('falls back to name field if first_name is missing', () => {
@@ -139,7 +142,10 @@ describe('CommandCenterHeader', () => {
       localStorage.setItem('user', JSON.stringify({ name: 'Tim Loss' }));
       resolveAllAPIs();
       renderHeader();
-      expect(screen.getByText(/Tim Loss/)).toBeInTheDocument();
+      // Greeting and name render as separate text nodes within the heading,
+      // so match against the heading's textContent.
+      const heading = screen.getByRole('heading');
+      expect(heading.textContent).toContain('Tim Loss');
     });
 
     it('renders greeting without name when localStorage is empty', () => {

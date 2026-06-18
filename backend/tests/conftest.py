@@ -160,13 +160,28 @@ def db_engine():
 
     yield test_engine
 
-    # Clean up after the full test session. DROP SCHEMA CASCADE is stale-safe —
-    # metadata.drop_all() can fail on unnamed/use_alter FK constraints that the
-    # multi-pass creator never named.
-    with test_engine.connect() as _c:
-        _c.execute(text("DROP SCHEMA public CASCADE"))
-        _c.execute(text("CREATE SCHEMA public"))
-        _c.commit()
+    # Clean up after the full test session.
+    #
+    # Prefer DROP SCHEMA ... CASCADE over Base.metadata.drop_all(): the latter
+    # emits a per-constraint "ALTER TABLE ... DROP CONSTRAINT" for every
+    # use_alter=True ForeignKey, and several factory/feature tables (e.g.
+    # purl_loans' self/forward FKs) declare those constraints WITHOUT an explicit
+    # name. SQLAlchemy cannot compile a DROP for an unnamed constraint and raises
+    # CompileError ("it has no name") / the constraint may not even exist under
+    # that name in the DB ("constraint ... does not exist"), erroring teardown.
+    # A schema-level CASCADE drop removes everything in one statement, never
+    # needing a constraint name. We guard every step so teardown can NEVER fail
+    # the session.
+    try:
+        with test_engine.begin() as _conn:
+            _conn.execute(text("DROP SCHEMA public CASCADE"))
+            _conn.execute(text("CREATE SCHEMA public"))
+    except Exception as _e:
+        logger.warning(f"Teardown schema reset failed, falling back to drop_all: {_e}")
+        try:
+            Base.metadata.drop_all(bind=test_engine)
+        except Exception as _e2:
+            logger.warning(f"Teardown drop_all ignored (non-fatal): {_e2}")
 
 
 @pytest.fixture(scope="function")

@@ -313,6 +313,14 @@ def register_telephony_routes(app, get_db, get_current_user, get_current_user_fl
     except Exception as e:
         logger.warning(f"Could not load Recording Consent routes: {e}")
 
+    # Include Disclosure Audio routes (public TTS-generated recording disclosure)
+    try:
+        from routes.disclosure_audio_routes import router as disclosure_audio_router
+        app.include_router(disclosure_audio_router, tags=["Call Intelligence Consent"])
+        logger.info("Disclosure Audio routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load Disclosure Audio routes: {e}")
+
     # Include Call Recording routes (mobile app call recording + AI summary)
     try:
         from api.routes.call_recording import router as call_recording_router

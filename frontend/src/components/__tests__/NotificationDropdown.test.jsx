@@ -196,8 +196,7 @@ describe('NotificationDropdown (Portal)', () => {
       />
     );
 
-    // Re-open (rerender keeps the closed state, so click again)
-    fireEvent.click(screen.getByRole('button', { name: /Notifications/i }));
+    // rerender preserves component state, so the panel is still open
     fireEvent.click(screen.getByText('Mark all as read'));
     expect(onMarkAllAsRead).toHaveBeenCalledOnce();
   });

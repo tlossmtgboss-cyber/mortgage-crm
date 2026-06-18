@@ -34,6 +34,7 @@ import {
   getArtifactIcon,
 } from '../hooks/useCallIntelligenceSession';
 import ConsentGateBanner from './aria/ConsentGateBanner';
+import api from '../services/api';
 
 // ============================================================================
 // Design Tokens (Perennia)
@@ -339,23 +340,19 @@ export default function MobileCallIntelligencePanel({
     sessionState, sessionId, consentInfo, errorMessage,
     isIdle, isPlayingDisclosure, isActive, isConsentFailed,
     isCompleted, isError, canManualOverride, canRetry,
-    transcript,
+    transcript, agentStatuses, agentEvents, duration, diagnostics,
+    canPlayDisclosure,
     startSession, stopSession, retryDisclosure, confirmVerbalDisclosure,
+    playDisclosureManually, sendAudio,
   } = useCallIntelligenceSession({
     callControlId,
     contactId: borrowerContext?.id || contactId,
     borrowerState: borrowerContext?.state || borrowerState,
     loanOfficerId: currentUser?.id,
     websocketUrl: `${wsBaseUrl}/api/v1/call-intelligence`,
-    onSessionActive: () => {
-      // Start audio capture ONLY after consent clears
-      // Wire to your existing useMobileAudioCapture hook here
-    },
   });
 
-  const [agentStatuses, setAgentStatuses] = useState({});
   const [artifacts, setArtifacts] = useState([]);
-  const [duration, setDuration] = useState(0);
   const [activeTab, setActiveTab] = useState('live');
   const transcriptEndRef = useRef(null);
 
@@ -367,11 +364,120 @@ export default function MobileCallIntelligencePanel({
   const [docChecklist, setDocChecklist] = useState([]);
   const [sttStatus, setSttStatus] = useState({ provider: 'deepgram', status: 'connected' });
 
+  // ── Microphone capture: PCM16 base64 chunks over the CI WebSocket ──
+  // Starts only after consent clears (isActive), stops on end/unmount.
+  const sendAudioRef = useRef(sendAudio);
+  sendAudioRef.current = sendAudio;
+  const audioCaptureRef = useRef(null);
+
+  const stopAudioCapture = useCallback(() => {
+    const cap = audioCaptureRef.current;
+    if (!cap) return;
+    audioCaptureRef.current = null;
+    try { cap.processor.disconnect(); } catch { /* already gone */ }
+    try { cap.source.disconnect(); } catch { /* already gone */ }
+    try { cap.context.close(); } catch { /* already gone */ }
+    cap.stream.getTracks().forEach((t) => t.stop());
+  }, []);
+
+  const startAudioCapture = useCallback(async () => {
+    if (audioCaptureRef.current) return;
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+      });
+
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      // Never force sampleRate on iOS: WebKit throws when a MediaStreamSource's
+      // hardware rate (44.1k/48k) differs from the context rate. Capture at the
+      // native rate and downsample to 16 kHz in JS.
+      const context = new AudioCtx();
+
+      // iOS starts contexts 'suspended' outside a user gesture.
+      if (context.state !== 'running') {
+        try { await context.resume(); } catch (e) {
+          console.warn('[CI] AudioContext resume failed:', e);
+        }
+      }
+      console.info(`[CI] AudioContext state=${context.state} sampleRate=${context.sampleRate}`);
+
+      const source = context.createMediaStreamSource(stream);
+      const processor = context.createScriptProcessor(4096, 1, 1);
+
+      const TARGET_RATE = 16000;
+      const ratio = context.sampleRate / TARGET_RATE;
+
+      processor.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+
+        // Downsample to 16 kHz: decimation with block averaging.
+        let samples;
+        if (ratio > 1) {
+          const outLength = Math.floor(input.length / ratio);
+          samples = new Float32Array(outLength);
+          for (let i = 0; i < outLength; i++) {
+            const start = Math.floor(i * ratio);
+            const end = Math.min(Math.floor((i + 1) * ratio), input.length);
+            let sum = 0;
+            for (let j = start; j < end; j++) sum += input[j];
+            samples[i] = sum / (end - start || 1);
+          }
+        } else {
+          samples = input;
+        }
+
+        const pcm16 = new Int16Array(samples.length);
+        for (let i = 0; i < samples.length; i++) {
+          const s = Math.max(-1, Math.min(1, samples[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        const bytes = new Uint8Array(pcm16.buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 8192) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+        }
+        sendAudioRef.current(btoa(binary));
+      };
+
+      source.connect(processor);
+      processor.connect(context.destination);
+      audioCaptureRef.current = { stream, context, source, processor };
+      setSttStatus({
+        provider: 'deepgram',
+        status: context.state === 'running' ? 'connected' : 'degraded',
+      });
+    } catch (err) {
+      console.error('[CI] Mic capture failed:', err.name, err.message);
+      // getUserMedia may have succeeded before the AudioContext wiring threw —
+      // stop the tracks or iOS keeps the mic indicator on with zero audio.
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      setSttStatus({ provider: 'deepgram', status: 'mic_blocked' });
+    }
+  }, []);
+
+  // Suspended contexts can only reliably resume inside a gesture on iOS.
+  const resumeAudioContext = useCallback(() => {
+    const ctx = audioCaptureRef.current?.context;
+    if (ctx && ctx.state !== 'running') {
+      ctx.resume()
+        .then(() => setSttStatus({ provider: 'deepgram', status: 'connected' }))
+        .catch(() => {});
+    }
+  }, []);
+
   useEffect(() => {
     if (!isActive) return;
-    const timer = setInterval(() => setDuration(d => d + 1), 1000);
-    return () => clearInterval(timer);
-  }, [isActive]);
+    document.addEventListener('touchend', resumeAudioContext, { passive: true });
+    return () => document.removeEventListener('touchend', resumeAudioContext);
+  }, [isActive, resumeAudioContext]);
+
+  useEffect(() => {
+    if (isActive) startAudioCapture();
+    else stopAudioCapture();
+  }, [isActive, startAudioCapture, stopAudioCapture]);
+
+  useEffect(() => () => stopAudioCapture(), [stopAudioCapture]);
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -380,14 +486,8 @@ export default function MobileCallIntelligencePanel({
   const handleConvertToApplication = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const resp = await fetch(`/api/v1/call-intelligence/session/${sessionId}/convert-to-application`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        onApplicationCreated?.(data);
-      }
+      const resp = await api.post(`/api/v1/call-intelligence/session/${sessionId}/convert-to-application`);
+      onApplicationCreated?.(resp.data);
     } catch (e) {
       console.error('Convert to application failed:', e);
     }
@@ -395,13 +495,8 @@ export default function MobileCallIntelligencePanel({
 
   const handleShareArtifact = useCallback(async (artifactId) => {
     try {
-      const resp = await fetch(`/api/v1/call-intelligence/artifacts/${artifactId}/share`, {
-        method: 'POST',
-      });
-      if (resp.ok) {
-        const { share_url } = await resp.json();
-        await navigator.clipboard.writeText(share_url);
-      }
+      const resp = await api.post(`/api/v1/call-intelligence/artifacts/${artifactId}/share`);
+      await navigator.clipboard.writeText(resp.data.share_url);
     } catch (e) {
       console.error('Share failed:', e);
     }
@@ -444,14 +539,14 @@ export default function MobileCallIntelligencePanel({
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          {isIdle && (
+          {(isIdle || isError) && (
             <button onClick={startSession} style={{
               padding: '6px 14px', borderRadius: T.radiusSm,
               background: T.blue, border: 'none', color: '#000',
               fontSize: '12px', fontWeight: 600, cursor: 'pointer',
               fontFamily: T.font,
             }}>
-              Start
+              {isError ? 'Try Again' : 'Start'}
             </button>
           )}
           {isPlayingDisclosure && (
@@ -494,8 +589,10 @@ export default function MobileCallIntelligencePanel({
           errorMessage={errorMessage}
           canManualOverride={canManualOverride}
           canRetry={canRetry}
+          canPlayDisclosure={canPlayDisclosure}
           onConfirmVerbalDisclosure={confirmVerbalDisclosure}
           onRetryDisclosure={retryDisclosure}
+          onPlayDisclosure={playDisclosureManually}
         />
       </div>
 
@@ -777,6 +874,18 @@ export default function MobileCallIntelligencePanel({
             <div style={{ fontSize: '12px', color: T.textMuted }}>
               {artifacts.length} artifacts • {transcript.length} transcript segments
             </div>
+            {diagnostics && (
+              <div style={{
+                fontSize: '10px', color: T.textMuted, fontFamily: T.mono,
+                textAlign: 'left', padding: '8px 12px', borderRadius: T.radiusSm,
+                background: T.surface, border: `1px solid ${T.surfaceBorder}`,
+                maxWidth: '320px', wordBreak: 'break-all',
+              }}>
+                {Object.entries(diagnostics).map(([k, v]) => (
+                  <div key={k}>{k}: {String(v)}</div>
+                ))}
+              </div>
+            )}
             {artifacts.length > 0 && (
               <button
                 onClick={handleConvertToApplication}

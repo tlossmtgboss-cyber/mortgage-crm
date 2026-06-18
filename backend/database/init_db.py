@@ -1531,6 +1531,51 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ Call monitoring tables note: {e}")
 
+        # Recording consent gate columns (Call Intelligence session lifecycle).
+        # migration_recording_consent.sql was never wired into startup, so the
+        # call_sessions table created above lacks the columns the consent
+        # routes write — apply them inline here (idempotent).
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE call_sessions
+                        ADD COLUMN IF NOT EXISTS call_control_id VARCHAR(255),
+                        ADD COLUMN IF NOT EXISTS loan_officer_id VARCHAR(36),
+                        ADD COLUMN IF NOT EXISTS contact_id VARCHAR(36),
+                        ADD COLUMN IF NOT EXISTS borrower_state VARCHAR(2),
+                        ADD COLUMN IF NOT EXISTS recording_consent_status VARCHAR(20) DEFAULT 'pending',
+                        ADD COLUMN IF NOT EXISTS consent_requirement VARCHAR(20),
+                        ADD COLUMN IF NOT EXISTS consent_disclosed_at TIMESTAMPTZ,
+                        ADD COLUMN IF NOT EXISTS consent_disclosure_method VARCHAR(20),
+                        ADD COLUMN IF NOT EXISTS is_two_party_state BOOLEAN DEFAULT false,
+                        ADD COLUMN IF NOT EXISTS consent_override_by VARCHAR(36),
+                        ADD COLUMN IF NOT EXISTS consent_override_at TIMESTAMPTZ,
+                        ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ,
+                        ADD COLUMN IF NOT EXISTS call_ended_at TIMESTAMPTZ
+                """))
+                # Stale CHECKs from the never-wired manual SQL migration reject
+                # values the app writes ('browser_pending', 'browser_local').
+                conn.execute(text("""
+                    ALTER TABLE call_sessions DROP CONSTRAINT IF EXISTS
+                        call_sessions_recording_consent_status_check
+                """))
+                conn.execute(text("""
+                    ALTER TABLE call_sessions DROP CONSTRAINT IF EXISTS
+                        call_sessions_consent_disclosure_method_check
+                """))
+                conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_call_sessions_consent_status
+                        ON call_sessions (recording_consent_status)
+                """))
+                conn.execute(text("""
+                    ALTER TABLE organizations
+                        ADD COLUMN IF NOT EXISTS recording_consent_config JSONB
+                """))
+                conn.commit()
+                logger.info("✅ Recording consent columns on call_sessions + organizations")
+        except Exception as e:
+            logger.warning(f"⚠️ Recording consent migration note: {e}")
+
         # Add organization_id to audit_logs for multi-tenant isolation (ISO-014)
         try:
             with _engine.connect() as conn:

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -17,32 +17,23 @@ vi.mock('../../utils/toast', () => ({
   },
 }));
 
-// Mock global fetch
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
-
-// localStorage mock
-Object.defineProperty(window, 'localStorage', {
-  value: {
-    getItem: vi.fn(() => 'test-token'),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
+// The component talks to the backend through the axios-based `api` service
+// (`api.get`/`api.post`), NOT the global fetch. Mock that module so the
+// component receives task data instead of a real network error.
+const mockApiGet = vi.fn();
+const mockApiPost = vi.fn();
+vi.mock('../../services/api', () => ({
+  default: {
+    get: (...args) => mockApiGet(...args),
+    post: (...args) => mockApiPost(...args),
   },
-});
+}));
 
 import UnifiedTaskSidebar from '../UnifiedTaskSidebar';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function mockFetchResponse(body, status = 200) {
-  return Promise.resolve({
-    ok: status >= 200 && status < 300,
-    status,
-    json: () => Promise.resolve(body),
-  });
-}
 
 const sampleTasks = [
   {
@@ -97,21 +88,24 @@ const sampleTasks = [
   },
 ];
 
-function setupDefaultFetch(tasks = sampleTasks) {
-  mockFetch.mockImplementation((url) => {
-    if (url.includes('/unified-tasks') && !url.includes('/approve')) {
-      return mockFetchResponse({ tasks, total_count: tasks.length });
+function setupDefaultApi(tasks = sampleTasks) {
+  mockApiGet.mockImplementation((url) => {
+    if (url.includes('/unified-tasks')) {
+      return Promise.resolve({ data: { tasks, total_count: tasks.length } });
     }
+    return Promise.resolve({ data: {} });
+  });
+  mockApiPost.mockImplementation((url) => {
     if (url.includes('/approve')) {
-      return mockFetchResponse({ success: true });
+      return Promise.resolve({ data: { success: true } });
     }
     if (url.includes('/ai/training/instruction')) {
-      return mockFetchResponse({ acknowledgment: 'Got it!' });
+      return Promise.resolve({ data: { acknowledgment: 'Got it!' } });
     }
     if (url.includes('/ai/regenerate-message')) {
-      return mockFetchResponse({ message: 'Regenerated message' });
+      return Promise.resolve({ data: { message: 'Regenerated message' } });
     }
-    return mockFetchResponse({});
+    return Promise.resolve({ data: {} });
   });
 }
 
@@ -122,7 +116,7 @@ function setupDefaultFetch(tasks = sampleTasks) {
 describe('UnifiedTaskSidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setupDefaultFetch();
+    setupDefaultApi();
   });
 
   // -- 1. Returns null when not open --
@@ -136,14 +130,14 @@ describe('UnifiedTaskSidebar', () => {
   // -- 2. Shows loading state while fetching --
   it('shows loading state while tasks are being fetched', async () => {
     let resolveApi;
-    mockFetch.mockReturnValue(new Promise((resolve) => { resolveApi = resolve; }));
+    mockApiGet.mockReturnValue(new Promise((resolve) => { resolveApi = resolve; }));
 
     render(<UnifiedTaskSidebar isOpen={true} onClose={vi.fn()} />);
 
     expect(screen.getByText(/loading tasks/i)).toBeInTheDocument();
 
     // Resolve to clean up
-    resolveApi(mockFetchResponse({ tasks: [], total_count: 0 }));
+    resolveApi({ data: { tasks: [], total_count: 0 } });
   });
 
   // -- 3. Renders task list after loading --
@@ -163,7 +157,7 @@ describe('UnifiedTaskSidebar', () => {
 
   // -- 4. Shows empty state when no tasks --
   it('displays empty state when there are no tasks', async () => {
-    setupDefaultFetch([]);
+    setupDefaultApi([]);
 
     await act(async () => {
       render(<UnifiedTaskSidebar isOpen={true} onClose={vi.fn()} />);
@@ -223,9 +217,11 @@ describe('UnifiedTaskSidebar', () => {
     const taskItem = screen.getByText('Follow up on pre-approval').closest('.task-item-v2');
     fireEvent.click(taskItem);
 
-    // Detail panel should show task info
+    // Detail panel should show task info. The client name also appears in the
+    // task list item, so scope the assertion to the detail panel.
     await waitFor(() => {
-      expect(screen.getByText('Alice Johnson')).toBeInTheDocument();
+      const detailPanel = document.querySelector('.task-detail-panel-v2');
+      expect(within(detailPanel).getByText('Alice Johnson')).toBeInTheDocument();
     });
   });
 
@@ -300,16 +296,19 @@ describe('UnifiedTaskSidebar', () => {
     fireEvent.click(firstTask);
 
     await waitFor(() => {
-      expect(screen.getByText('Alice Johnson')).toBeInTheDocument();
+      const detailPanel = document.querySelector('.task-detail-panel-v2');
+      expect(within(detailPanel).getByText('Alice Johnson')).toBeInTheDocument();
     });
 
     // Click snooze
     const snoozeBtn = screen.getByText('Snooze');
     fireEvent.click(snoozeBtn);
 
-    // Should move to next task (Bob Williams)
+    // Should move to next task (Bob Williams) — assert in the detail panel,
+    // since the name also appears in the task list.
     await waitFor(() => {
-      expect(screen.getByText('Bob Williams')).toBeInTheDocument();
+      const detailPanel = document.querySelector('.task-detail-panel-v2');
+      expect(within(detailPanel).getByText('Bob Williams')).toBeInTheDocument();
     });
   });
 

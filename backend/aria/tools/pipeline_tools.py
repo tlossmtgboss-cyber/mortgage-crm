@@ -162,20 +162,29 @@ class PipelineTools:
                 db.close()
         return await _run_sync(_query)
 
-    async def get_document_status(self, loan_id: int) -> List[Dict]:
-        """Get document status for a loan."""
+    async def get_document_status(self, loan_id: int, org_id: str = "") -> List[Dict]:
+        """Get document-request status for a loan.
+
+        Reads the REAL `smart_document_requests` table (singular) the portal and
+        smart_docs subsystem use — not the nonexistent `smart_docs_requests`.
+        status/doc_type are PG enums, cast to text. 'received' == ACCEPTED.
+        """
         def _query():
             db = SessionLocal()
             try:
                 rows = db.execute(text(
-                    "SELECT id, document_name, status "
-                    "FROM smart_docs_requests "
-                    "WHERE loan_id = :loan_id "
-                    "ORDER BY created_at DESC"
-                ), {"loan_id": loan_id}).fetchall()
-                return [{"id": r[0], "name": r[1], "received": r[2] == "completed",
-                         "status": r[2]} for r in rows]
-            except Exception:
+                    "SELECT r.id, r.title, CAST(r.status AS TEXT), CAST(r.doc_type AS TEXT) "
+                    "FROM smart_document_requests r "
+                    "JOIN loans l ON l.id = r.loan_id "
+                    "WHERE r.loan_id = :loan_id AND l.organization_id = :org "
+                    "AND r.is_active = TRUE "
+                    "ORDER BY r.created_at DESC"
+                ), {"loan_id": loan_id, "org": org_id}).fetchall()
+                return [{"id": r[0], "name": r[1],
+                         "received": (r[2] or "").upper() == "ACCEPTED",
+                         "status": r[2], "doc_type": r[3]} for r in rows]
+            except Exception as e:
+                logger.error(f"get_document_status failed: {e}")
                 return []
             finally:
                 db.close()
@@ -184,32 +193,59 @@ class PipelineTools:
     async def send_document_request(
         self, loan_id: int, borrower: Dict,
         doc_list: str, due_date: Optional[str] = None,
-        note: Optional[str] = None, requested_by: str = "",
+        note: Optional[str] = None, requested_by: str = "", org_id: str = "",
     ) -> Dict:
-        """Send a document request to a borrower via the portal."""
-        def _query():
+        """Create borrower document requests via the canonical NeedsListGenerator.
+
+        Writes real rows into `smart_document_requests` (keyed on loan_id) so they
+        surface in the borrower portal. Replaces the prior INSERT into the
+        nonexistent `smart_docs_requests` table with fabricated columns. The
+        generator resolves organization_id + enum types from the loan.
+        """
+        def _work():
             db = SessionLocal()
             try:
+                # Defense-in-depth: never create rows on another tenant's loan.
+                owns = db.execute(text(
+                    "SELECT 1 FROM loans WHERE id = :id AND organization_id = :org"
+                ), {"id": loan_id, "org": org_id}).fetchone()
+                if not owns:
+                    return {"action": "document_request_failed", "docs_requested": 0,
+                            "error": "Loan not found in your organization."}
+
+                from services.smart_docs.needs_list_generator import NeedsListGenerator
+                gen = NeedsListGenerator(db)
+
+                parsed_due = None
+                if due_date:
+                    try:
+                        parsed_due = datetime.fromisoformat(str(due_date).replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        parsed_due = None
+
                 docs = [d.strip() for d in doc_list.split(",") if d.strip()]
+                created = 0
                 for doc_name in docs:
-                    db.execute(text(
-                        "INSERT INTO smart_docs_requests "
-                        "(loan_id, document_name, status, requested_by, due_date, notes, created_at) "
-                        "VALUES (:loan, :name, 'pending', :by, :due, :notes, NOW())"
-                    ), {
-                        "loan": loan_id, "name": doc_name, "by": requested_by,
-                        "due": due_date, "notes": note,
-                    })
-                db.commit()
-                portal_link = f"https://app.perenniaai.com/portal/{borrower['id']}/documents"
-                return {"portal_link": portal_link, "docs_requested": len(docs)}
+                    gen.add_custom_request(
+                        loan_id=loan_id,
+                        borrower_id=None,   # Aria resolves a lead, not a borrower_profiles.id; portal keys on loan_id
+                        title=doc_name,
+                        description=note,
+                        instructions=note,
+                        priority="NORMAL",
+                        due_date=parsed_due,
+                        doc_type=None,      # mapped to DocType.OTHER unless the name matches a known type
+                    )
+                    created += 1
+                return {"portal_link": "", "docs_requested": created}
             except Exception as e:
                 db.rollback()
-                logger.error(f"Document request failed: {e}")
-                return {"portal_link": "", "docs_requested": 0, "error": str(e)}
+                logger.error(f"send_document_request failed: {e}", exc_info=True)
+                return {"action": "document_request_failed", "docs_requested": 0,
+                        "error": "Could not create the document request(s)."}
             finally:
                 db.close()
-        return await _run_sync(_query)
+        return await _run_sync(_work)
 
     async def generate_report(
         self, user_id: str, org_id: str,

@@ -294,8 +294,9 @@ def main():
     print(f"START.PY: Starting uvicorn on port {port}...", flush=True)
     print("=" * 50, flush=True)
 
-    # Single worker — numReplicas=1 with pool_size=5 + max_overflow=1 = 6 connections.
-    # Adding --workers would multiply connection usage beyond safe limits.
+    # Single uvicorn process — the web app's DB pool is role-sized in db.py
+    # (web=15+10=25 max; worker services=2+3=5). Adding --workers would multiply
+    # connection usage by N and blow the shared Postgres max_connections budget.
     os.execvp("uvicorn", [
         "uvicorn",
         "main:app",
