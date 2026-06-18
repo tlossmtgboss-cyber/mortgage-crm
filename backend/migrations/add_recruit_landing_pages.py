@@ -96,7 +96,7 @@ def run_migration(engine=None) -> None:
                 conn.execute(text("""
                     INSERT INTO recruit_landing_pages
                         (organization_id, title, slug, status, config)
-                    VALUES (:org_id, :title, :slug, :status, :config::jsonb)
+                    VALUES (:org_id, :title, :slug, :status, CAST(:config AS jsonb))
                     ON CONFLICT (organization_id, slug) DO NOTHING
                 """), {
                     "org_id": org[0],
