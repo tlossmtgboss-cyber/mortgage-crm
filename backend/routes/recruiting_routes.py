@@ -36,15 +36,7 @@ router = APIRouter(
 )
 
 
-def _verify_candidate_org(db: Session, candidate_id: int, organization_id: int):
-    """Verify candidate belongs to the caller's organization. Returns the row or raises 404."""
-    row = db.execute(text("""
-        SELECT id FROM mm_candidates
-        WHERE id = :id AND organization_id = :org_id AND is_active = true
-    """), {"id": candidate_id, "org_id": organization_id}).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-    return row
+from routes.recruiting._utils import verify_candidate_org as _verify_candidate_org
 
 
 # =============================================================================
@@ -285,6 +277,7 @@ class CandidateStatusUpdate(BaseModel):
     reason: Optional[str] = None
     disposition_code: Optional[str] = None
     skip_score_gate: bool = False  # Admin override for score/NMLS gates
+    bypass_reason: Optional[str] = None  # Required justification when skip_score_gate=True
 
 
 class JobPostingCreate(BaseModel):
@@ -551,6 +544,13 @@ async def update_candidate_status(
     if data.skip_score_gate and current_user.role not in ("admin", "platform_admin", "site_admin"):
         raise HTTPException(status_code=403, detail="Only admins can override score gates")
 
+    # Capture old status before the update (needed for bypass audit trail)
+    old_status_row = db.execute(
+        text("SELECT status FROM mm_candidates WHERE id = :id AND organization_id = :org_id"),
+        {"id": candidate_id, "org_id": current_user.organization_id}
+    ).fetchone()
+    old_status = old_status_row.status if old_status_row else None
+
     service = RecruitingService(db)
     try:
         result = await service.update_candidate_status(
@@ -562,6 +562,29 @@ async def update_candidate_status(
             disposition_code=data.disposition_code,
             skip_score_gate=data.skip_score_gate,
         )
+
+        # Audit trail for score gate bypass
+        if data.skip_score_gate:
+            try:
+                db.execute(text("""
+                    INSERT INTO mm_score_gate_bypass_log
+                        (organization_id, candidate_id, bypassed_by_user_id,
+                         old_status, new_status, bypass_reason, bypassed_at)
+                    VALUES
+                        (:org_id, :candidate_id, :user_id,
+                         :old_status, :new_status, :bypass_reason, NOW())
+                """), {
+                    "org_id": current_user.organization_id,
+                    "candidate_id": candidate_id,
+                    "user_id": current_user.id,
+                    "old_status": old_status,
+                    "new_status": data.status,
+                    "bypass_reason": data.bypass_reason,
+                })
+                db.commit()
+            except Exception as e:
+                logger.warning("Failed to write score gate bypass audit log: %s", e)
+
         return result
     except ValueError as e:
         error_msg = str(e)

@@ -40,14 +40,7 @@ def _require_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
 
-def _verify_candidate_org(db: Session, candidate_id: int, organization_id: int):
-    """Verify candidate belongs to the caller's organization."""
-    row = db.execute(text("""
-        SELECT id FROM mm_candidates
-        WHERE id = :id AND organization_id = :org_id AND is_active = true
-    """), {"id": candidate_id, "org_id": organization_id}).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+from routes.recruiting._utils import verify_candidate_org as _verify_candidate_org
 
 
 # Portal token TTL — tokens older than this are rejected

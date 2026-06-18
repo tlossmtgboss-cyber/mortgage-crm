@@ -58,8 +58,7 @@ FEATURE_TIERS: Dict[str, FeatureTier] = {
     "call_intelligence": FeatureTier.CORE,
     "referral_partners": FeatureTier.CORE,
     "rate_monitor": FeatureTier.CORE,
-    # DEPRECATED: Premium feature deregistered — not yet launched
-    # "recruiting": FeatureTier.CORE,
+    "recruiting": FeatureTier.PREMIUM,
     # Promoted from PREMIUM to CORE - enterprise table stakes (March 2026)
     "salesforce_sync": FeatureTier.CORE,
     "encompass_sync": FeatureTier.CORE,

@@ -33,14 +33,7 @@ from routes.auth_deps import require_auth
 router = APIRouter(prefix="/api/v1/recruiting", tags=["Recruiting Assessment"], dependencies=[Depends(require_auth)])
 
 
-def _verify_candidate_org(db: Session, candidate_id: int, organization_id: int):
-    """Verify candidate belongs to the user's organization."""
-    row = db.execute(text("""
-        SELECT id FROM mm_candidates
-        WHERE id = :id AND organization_id = :org_id AND is_active = true
-    """), {"id": candidate_id, "org_id": organization_id}).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+from routes.recruiting._utils import verify_candidate_org as _verify_candidate_org
 
 
 def _require_admin(current_user: User):

@@ -22,14 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/recruiting/candidates", tags=["Candidate Grading"])
 
 
-def _verify_candidate_org(db: Session, candidate_id: int, organization_id: int):
-    """Verify candidate belongs to the caller's organization."""
-    row = db.execute(text("""
-        SELECT id FROM mm_candidates
-        WHERE id = :id AND organization_id = :org_id AND is_active = true
-    """), {"id": candidate_id, "org_id": organization_id}).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+from routes.recruiting._utils import verify_candidate_org as _verify_candidate_org
 
 
 # =============================================================================
@@ -1044,7 +1037,10 @@ async def run_ai_analysis(
 
             "recommendation": {
                 "decision": analysis.hire_recommendation,
-                "reasoning": analysis.recommendation_reasoning
+                "reasoning": analysis.recommendation_reasoning,
+                "advisory_only": analysis.ai_recommendation_locked,
+                "requires_human_review": analysis.requires_human_review,
+                "eeoc_disclaimer": analysis.eeoc_disclaimer
             }
         }
 
