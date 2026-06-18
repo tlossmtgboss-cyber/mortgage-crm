@@ -911,9 +911,6 @@ export function getRoutes(layoutProps, options = {}) {
     }>
       <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><RecruitDashboard /></Suspense>} />
       <Route path="jobs" element={<Suspense fallback={<PageLoader />}><RecruitJobs /></Suspense>} />
-      <Route path="knowledge-base" element={<Suspense fallback={<PageLoader />}><KnowledgeBase /></Suspense>} />
-      <Route path="embed-settings" element={<Suspense fallback={<PageLoader />}><EmbedSettings /></Suspense>} />
-      <Route path="website-builder" element={<Suspense fallback={<PageLoader />}><WebsiteBuilder /></Suspense>} />
       <Route path="license-manager" element={<Suspense fallback={<PageLoader />}><LicenseManager /></Suspense>} />
       <Route path="website-builder" element={<Suspense fallback={<PageLoader />}><RecruitWebsiteBuilder /></Suspense>} />
       <Route path="knowledge-base" element={<Suspense fallback={<PageLoader />}><RecruitKnowledgeBase /></Suspense>} />
