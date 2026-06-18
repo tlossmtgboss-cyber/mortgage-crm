@@ -453,6 +453,47 @@ def seed_callcenter_page(
 
 
 # ---------------------------------------------------------------------------
+# Admin seed endpoint (no CRM auth — uses X-Admin-Key header)
+# ---------------------------------------------------------------------------
+
+@landing_pages_public_router.post("/admin/seed-callcenter", status_code=200)
+def admin_seed_callcenter(x_admin_key: str = Header(...)):
+    """Seed callcenter page for all orgs. Protected by X-Admin-Key header."""
+    import os as _os, json as _json
+    from sqlalchemy import create_engine as _ce
+    from sqlalchemy import text as _text
+    if x_admin_key != _os.environ.get("ADMIN_SEED_KEY", "perennia-seed-2026"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from migrations.add_recruit_landing_pages import _CALLCENTER_CONFIG
+    db_url = _os.environ.get("DATABASE_URL", "")
+    if not db_url:
+        raise HTTPException(status_code=500, detail="No DATABASE_URL")
+    eng = _ce(db_url)
+    results = []
+    try:
+        with eng.connect() as c:
+            orgs = c.execute(_text("SELECT id, slug FROM organizations WHERE slug IS NOT NULL AND slug != ''")).fetchall()
+        for org_id, org_slug in orgs:
+            try:
+                with eng.begin() as c2:
+                    c2.execute(_text(f"SET app.current_tenant = '{org_slug}'"))
+                    r = c2.execute(_text("""
+                        INSERT INTO recruit_landing_pages
+                            (organization_id, title, slug, status, config)
+                        VALUES (:oid, :title, :slug, 'published', CAST(:cfg AS jsonb))
+                        ON CONFLICT (organization_id, slug) DO NOTHING
+                        RETURNING id
+                    """), {"oid": org_id, "title": "Call Center — SC",
+                           "slug": "callcenter", "cfg": _json.dumps(_CALLCENTER_CONFIG)}).fetchone()
+                results.append({"org_id": org_id, "slug": org_slug, "inserted": r is not None})
+            except Exception as e:
+                results.append({"org_id": org_id, "slug": org_slug, "error": str(e)})
+    finally:
+        eng.dispose()
+    return {"results": results}
+
+
+# ---------------------------------------------------------------------------
 # Public endpoints
 # ---------------------------------------------------------------------------
 
