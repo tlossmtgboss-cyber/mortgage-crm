@@ -15,6 +15,7 @@ from services.recruiting_service import RecruitingService
 from auth.dependencies import get_current_user
 from database.models import User
 from sqlalchemy.exc import SQLAlchemyError
+import json
 import logging
 import os
 
@@ -854,7 +855,6 @@ async def submit_feedback(
     db: Session = Depends(get_db),
 ):
     """Submit feedback for an interview."""
-    import json as _json
     interview_row = db.execute(text("""
         SELECT interviewer_user_ids, primary_interviewer_id
         FROM mm_interviews
@@ -866,7 +866,7 @@ async def submit_feedback(
 
     interviewer_ids = interview_row.interviewer_user_ids
     if isinstance(interviewer_ids, str):
-        interviewer_ids = _json.loads(interviewer_ids)
+        interviewer_ids = json.loads(interviewer_ids)
     interviewer_ids = interviewer_ids or []
 
     is_admin = current_user.role in ("admin", "platform_admin", "site_admin")
