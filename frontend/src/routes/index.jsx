@@ -7,6 +7,8 @@ import RouteErrorBoundary from '../components/RouteErrorBoundary';
 import MobileErrorBoundary from '../components/mobile/MobileErrorBoundary';
 // eslint-disable-next-line no-unused-vars
 import ProtectedRoute from '../components/ProtectedRoute';
+import { RecruitPlatformProvider } from '../contexts/RecruitPlatformContext';
+import RecruitAuthGuard from '../components/recruit/RecruitAuthGuard';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
 import Registration from '../pages/Registration';
@@ -314,6 +316,14 @@ const RecruitingPlatform = lazyRetry(() => import('../pages/RecruitingPlatform')
 const InterviewCalendar = lazyRetry(() => import('../pages/RecruitingPlatform/InterviewCalendar'));
 const MilestonesBoard = lazyRetry(() => import('../pages/RecruitingPlatform/MilestonesBoard'));
 const CandidateBookingPage = lazyRetry(() => import('../pages/RecruitingPlatform/CandidateBookingPage'));
+
+// Recruit Platform — standalone recruiting app (recruit.perenniaai.com)
+const RecruitLogin = lazyRetry(() => import('../pages/RecruitPlatform/Login'));
+const ApplicationForm = lazyRetry(() => import('../pages/RecruitPlatform/ApplicationForm'));
+const RecruitDashboard = lazyRetry(() => import('../pages/RecruitPlatform/Dashboard'));
+const RecruitJobs = lazyRetry(() => import('../pages/RecruitPlatform/Jobs'));
+const LicenseManager = lazyRetry(() => import('../pages/RecruitPlatform/LicenseManager'));
+const RecruitLayout = lazyRetry(() => import('../pages/RecruitPlatform/RecruitLayout'));
 const AgentGym = lazyRetry(() => import('../pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('../pages/AgentGovernanceSettings'));
 const MemoryStaging = lazyRetry(() => import('../pages/MemoryStaging'));
@@ -880,6 +890,32 @@ export function getRoutes(layoutProps, options = {}) {
     // Role-specific dashboards
     <Route key="/dashboard/loan-officer" path="/dashboard/loan-officer" element={withMainLayout(LODashboard)} />,
     <Route key="/dashboard/realtor" path="/dashboard/realtor" element={withMainLayout(RealtorDashboard)} />,
+
+    // =============================================================================
+    // RECRUIT PLATFORM — standalone recruiting app at recruit.perenniaai.com
+    // All /recruit/* routes share the RecruitPlatformProvider context.
+    // =============================================================================
+    <Route key="/recruit" path="/recruit" element={
+      <RecruitPlatformProvider>
+        <Suspense fallback={<PageLoader />}>
+          <RecruitAuthGuard>
+            <RecruitLayout />
+          </RecruitAuthGuard>
+        </Suspense>
+      </RecruitPlatformProvider>
+    }>
+      <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><RecruitDashboard /></Suspense>} />
+      <Route path="jobs" element={<Suspense fallback={<PageLoader />}><RecruitJobs /></Suspense>} />
+      <Route path="license-manager" element={<Suspense fallback={<PageLoader />}><LicenseManager /></Suspense>} />
+    </Route>,
+    <Route key="/recruit/login" path="/recruit/login" element={
+      <RecruitPlatformProvider>
+        <Suspense fallback={<PageLoader />}><RecruitLogin /></Suspense>
+      </RecruitPlatformProvider>
+    } />,
+    <Route key="/recruit/apply/:orgSlug" path="/recruit/apply/:orgSlug" element={
+      <Suspense fallback={<PageLoader />}><ApplicationForm /></Suspense>
+    } />,
 
     // 403 Forbidden
     <Route key="forbidden" path="/forbidden" element={<LazyPage><Forbidden /></LazyPage>} />,

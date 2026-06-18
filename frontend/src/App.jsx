@@ -417,6 +417,15 @@ function App() {
     taskCounts,
   };
 
+  // Redirect recruit subdomain to /recruit/login if not already there
+  if (
+    window.location.hostname === 'recruit.perenniaai.com' &&
+    !window.location.pathname.startsWith('/recruit')
+  ) {
+    window.location.replace('/recruit/login');
+    return null;
+  }
+
   // Platform-dependent root element
   const rootElement = (
     Capacitor.isNativePlatform() || window.location.hostname.startsWith('192.168.')
