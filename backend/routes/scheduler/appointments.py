@@ -1433,7 +1433,8 @@ async def cancel_appointment(
     except HTTPException:
         raise  # Re-raise our 422 — don't swallow it
     except Exception as e:
-        logger.debug(f"Could not check cancellation policy pre-commit: {e}")
+        logger.warning(f"Cancellation policy check failed: {e}")
+        raise HTTPException(status_code=503, detail="Unable to verify cancellation policy")
 
     # Cancel the appointment
     appointment.status = AppointmentStatus.CANCELLED

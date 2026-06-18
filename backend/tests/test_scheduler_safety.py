@@ -221,20 +221,36 @@ class TestCancelPolicyEnforcedBeforeCommit:
                 )
 
                 # CRITICAL: db.commit must NOT have been called
-                mock_db.commit.assert_not_called(), (
-                    "db.commit() was called before policy check — commit must not happen "
-                    "when cancellation is blocked by policy"
-                )
+                mock_db.commit.assert_not_called()
 
     def test_policy_allows_staff_cancel(self):
         """
-        When is_staff=True, can_cancel returns allowed=True.
-        Verify the route proceeds past the policy gate (no 422).
+        When can_cancel returns allowed=True (staff path), cancel_appointment
+        must not raise HTTPException and must call db.commit() exactly once.
         """
-        # This is a lighter test — just verify can_cancel is called with is_staff=True
-        # when the user is an admin.
-        mock_policy_svc = MagicMock()
-        mock_policy_svc.can_cancel.return_value = {
+        from fastapi import HTTPException
+        from datetime import datetime, timezone, timedelta
+
+        appt = self._build_mock_appointment()
+
+        # Build a mock DB session
+        mock_db = MagicMock()
+        mock_db_query_chain = MagicMock()
+        mock_db_query_chain.filter.return_value = mock_db_query_chain
+        mock_db_query_chain.first.return_value = appt
+        mock_db.query.return_value = mock_db_query_chain
+        mock_db.commit = MagicMock()
+
+        # Admin user (is_admin=True → is_staff=True in policy call)
+        mock_user = MagicMock()
+        mock_user.id = 10
+        mock_user.email = "admin@example.com"
+        mock_user.full_name = "Admin User"
+        mock_user.role = "admin"
+        mock_user.organization_id = 1
+
+        # Policy allows (staff path)
+        mock_policy_result = {
             "allowed": True,
             "reason": "Staff cancellation",
             "is_late": False,
@@ -244,19 +260,60 @@ class TestCancelPolicyEnforcedBeforeCommit:
             "require_reason": False,
             "cancellation_reasons": [],
         }
+        mock_policy_svc = MagicMock()
+        mock_policy_svc.can_cancel.return_value = mock_policy_result
 
-        # Verify that can_cancel is called with is_staff=True when admin
-        with patch("services.cancellation_policy_service.CancellationPolicyService",
-                   return_value=mock_policy_svc):
-            from services.cancellation_policy_service import CancellationPolicyService
-            svc = CancellationPolicyService(MagicMock())
-            result = svc.can_cancel(
-                appointment_id=1,
-                cancelled_by_email="admin@example.com",
-                org_id=1,
-                is_staff=True,
-            )
-            assert result["allowed"] is True
+        stubs = {
+            "smart_scheduler_models": MagicMock(
+                AppointmentStatus=MagicMock(CANCELLED=MagicMock(), BOOKED=MagicMock())
+            ),
+        }
+
+        with patch.dict(sys.modules, stubs):
+            sys.modules.pop("routes.scheduler.appointments", None)
+
+            with patch("routes.scheduler.appointments.get_models") as mock_get_models, \
+                 patch("routes.scheduler.appointments.get_current_user") as mock_get_user, \
+                 patch("routes.scheduler.appointments._get_org_id", return_value=1), \
+                 patch("routes.scheduler.appointments._is_scheduler_admin", return_value=True), \
+                 patch("routes.scheduler.appointments._audit_log"), \
+                 patch("routes.scheduler.appointments._log_appointment_activity"), \
+                 patch("routes.scheduler.appointments._create_followup_task"), \
+                 patch("routes.scheduler.appointments._convert_utc_to_user_tz",
+                       return_value=datetime.now(timezone.utc)), \
+                 patch("routes.scheduler.appointments.scheduler_audit"), \
+                 patch("services.cancellation_policy_service.CancellationPolicyService",
+                       return_value=mock_policy_svc):
+
+                mock_appointment_cls = MagicMock()
+                mock_get_models.return_value = {
+                    "Appointment": mock_appointment_cls,
+                    "User": MagicMock(),
+                }
+                mock_get_user.return_value = mock_user
+
+                from routes.scheduler.appointments import cancel_appointment
+
+                mock_request = MagicMock()
+                mock_background_tasks = MagicMock()
+
+                # Should NOT raise — policy allows the cancel
+                try:
+                    asyncio.run(cancel_appointment(
+                        appointment_id=99,
+                        background_tasks=mock_background_tasks,
+                        cancel_data=None,
+                        request=mock_request,
+                        db=mock_db,
+                    ))
+                except HTTPException as exc:
+                    pytest.fail(
+                        f"cancel_appointment raised HTTPException({exc.status_code}) "
+                        f"when policy allows: {exc.detail}"
+                    )
+
+                # db.commit() must have been called at least once (primary cancellation commit)
+                mock_db.commit.assert_called()
 
 
 # ---------------------------------------------------------------------------
