@@ -20,6 +20,7 @@ from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id,
     _generate_available_slots,
 )
+from routes.scheduler._pii import apply_pii_mask
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -265,14 +266,18 @@ async def get_appointment_no_show_risk(
 
     risk = _calculate_no_show_risk(appointment, db, Appointment, _AppointmentStatus, org_id)
 
-    return {
-        "appointment_id": appointment_id,
-        "attendee_name": appointment.attendee_name,
-        "attendee_email": appointment.attendee_email,
-        "scheduled_start": appointment.scheduled_start.isoformat() if appointment.scheduled_start else None,
-        "status": appointment.status.value if appointment.status else None,
-        **risk
-    }
+    return apply_pii_mask(
+        {
+            "appointment_id": appointment_id,
+            "attendee_name": appointment.attendee_name,
+            "attendee_email": appointment.attendee_email,
+            "scheduled_start": appointment.scheduled_start.isoformat() if appointment.scheduled_start else None,
+            "status": appointment.status.value if appointment.status else None,
+            **risk,
+        },
+        user,
+        appointment,
+    )
 
 
 @router.get("/analytics/no-show-risks")
@@ -308,16 +313,20 @@ async def get_batch_no_show_risks(
     results = []
     for appt in appointments:
         risk = _calculate_no_show_risk(appt, db, Appointment, _AppointmentStatus, org_id)
-        results.append({
-            "appointment_id": appt.id,
-            "title": appt.title,
-            "attendee_name": appt.attendee_name,
-            "attendee_email": appt.attendee_email,
-            "scheduled_start": appt.scheduled_start.isoformat() if appt.scheduled_start else None,
-            "status": appt.status.value if appt.status else None,
-            "meeting_type": appt.meeting_type.value if appt.meeting_type else None,
-            **risk
-        })
+        results.append(apply_pii_mask(
+            {
+                "appointment_id": appt.id,
+                "title": appt.title,
+                "attendee_name": appt.attendee_name,
+                "attendee_email": appt.attendee_email,
+                "scheduled_start": appt.scheduled_start.isoformat() if appt.scheduled_start else None,
+                "status": appt.status.value if appt.status else None,
+                "meeting_type": appt.meeting_type.value if appt.meeting_type else None,
+                **risk,
+            },
+            user,
+            appt,
+        ))
 
     # Sort by score descending (highest risk first)
     results.sort(key=lambda r: r["score"], reverse=True)

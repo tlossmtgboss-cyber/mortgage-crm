@@ -10,9 +10,13 @@ Endpoints:
 All endpoints require authentication and are scoped to the user's organization.
 """
 
+import csv
+import io
+import json
 import math
 from datetime import date as date_type, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -35,6 +39,83 @@ from services.calendar_analytics_service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# =============================================================================
+# REDIS ANALYTICS CACHE HELPERS
+# =============================================================================
+# TTL: 300 seconds (5 minutes) — analytics tolerate slight staleness.
+# All Redis errors are silently swallowed so analytics never breaks on Redis outage.
+
+_ANALYTICS_CACHE_TTL = 300
+
+
+def _analytics_cache_key(org_id: int, endpoint: str, **params) -> str:
+    param_str = ":".join(f"{k}={v}" for k, v in sorted(params.items()))
+    return f"analytics:{org_id}:{endpoint}:{param_str}"
+
+
+def _analytics_cache_get(key: str):
+    try:
+        from services.redis_service import redis_service
+        r = redis_service.get_client()
+        if r is None:
+            return None
+        raw = r.get(key)
+        return json.loads(raw) if raw is not None else None
+    except Exception as exc:
+        logger.debug("Analytics cache GET failed key=%s: %s", key, exc)
+        return None
+
+
+def _analytics_cache_set(key: str, value: dict) -> None:
+    try:
+        from services.redis_service import redis_service
+        r = redis_service.get_client()
+        if r is None:
+            return
+        r.setex(key, _ANALYTICS_CACHE_TTL, json.dumps(value))
+    except Exception as exc:
+        logger.debug("Analytics cache SET failed key=%s: %s", key, exc)
+
+
+# =============================================================================
+# BRANCH MANAGER SCOPING HELPERS
+# =============================================================================
+
+def _is_branch_manager(user) -> bool:
+    role = getattr(user, 'permission_role', '') or ''
+    return role.lower() in ('branch_manager', 'manager', 'team_lead', 'management')
+
+
+def _get_managed_user_ids(user_id: int, org_id: int, db) -> list:
+    """Return IDs of users managed by this user (direct reports + same-branch peers)."""
+    try:
+        from database.models.core import User
+        from sqlalchemy import or_ as sql_or
+
+        manager = db.query(User.branch_id).filter(
+            User.id == user_id,
+            User.organization_id == org_id,
+        ).first()
+        manager_branch_id = manager.branch_id if manager else None
+
+        scoping_conditions = [User.manager_id == user_id]
+        if manager_branch_id is not None:
+            scoping_conditions.append(User.branch_id == manager_branch_id)
+
+        rows = db.query(User.id).filter(
+            User.organization_id == org_id,
+            sql_or(*scoping_conditions),
+        ).all()
+        ids = [str(row.id) for row in rows]
+    except Exception as e:
+        logger.warning("_get_managed_user_ids failed (falling back to self-only): %s", e)
+        ids = []
+
+    if str(user_id) not in ids:
+        ids.append(str(user_id))
+    return ids
 
 
 # =============================================================================
@@ -222,18 +303,39 @@ async def analytics_overview(
     if not models:
         raise HTTPException(status_code=503, detail="Scheduler models not available")
 
-    # Non-admins can only see their own data
-    effective_user_id = user_id
-    if user_id and user_id != current_user.id and not _is_scheduler_admin(current_user):
-        raise HTTPException(status_code=403, detail="Only admins can view other users' analytics")
-    if not _is_scheduler_admin(current_user):
+    # Three-tier access: admin → org-wide, branch_manager → team, LO → self
+    effective_user_id = None
+    effective_user_ids = None
+
+    if _is_scheduler_admin(current_user):
+        if user_id and user_id != current_user.id:
+            effective_user_id = user_id
+        elif user_id == current_user.id:
+            effective_user_id = current_user.id
+    elif _is_branch_manager(current_user):
+        if user_id and user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Branch managers cannot view arbitrary users' analytics")
+        managed = _get_managed_user_ids(current_user.id, org_id, db)
+        effective_user_ids = [int(uid) for uid in managed]
+    else:
         effective_user_id = current_user.id
 
     try:
-        data = get_overview_metrics(db, models, org_id, period=period, user_id=effective_user_id)
+        cache_key = _analytics_cache_key(
+            org_id, "overview", period=period, user_id=effective_user_id or 0,
+        )
+        cached = _analytics_cache_get(cache_key)
+        if cached is not None:
+            return AnalyticsOverview(**cached)
+
+        data = get_overview_metrics(
+            db, models, org_id, period=period,
+            user_id=effective_user_id, user_ids=effective_user_ids,
+        )
         eff_start, eff_end = _effective_date_range(period, start_date, end_date)
         data["start_date"] = eff_start
         data["end_date"] = eff_end
+        _analytics_cache_set(cache_key, data)
         return AnalyticsOverview(**data)
     except Exception as e:
         logger.exception(f"Analytics overview failed: {e}")
@@ -272,26 +374,49 @@ async def analytics_trends(
     if not models:
         raise HTTPException(status_code=503, detail="Scheduler models not available")
 
-    effective_user_id = user_id
-    if user_id and user_id != current_user.id and not _is_scheduler_admin(current_user):
-        raise HTTPException(status_code=403, detail="Only admins can view other users' analytics")
-    if not _is_scheduler_admin(current_user):
+    effective_user_id = None
+    effective_user_ids = None
+
+    if _is_scheduler_admin(current_user):
+        if user_id and user_id != current_user.id:
+            effective_user_id = user_id
+        elif user_id == current_user.id:
+            effective_user_id = current_user.id
+    elif _is_branch_manager(current_user):
+        if user_id and user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Branch managers cannot view arbitrary users' analytics")
+        managed = _get_managed_user_ids(current_user.id, org_id, db)
+        effective_user_ids = [int(uid) for uid in managed]
+    else:
         effective_user_id = current_user.id
 
     try:
-        data = get_appointment_trends(
-            db, models, org_id, period=period, granularity=granularity, user_id=effective_user_id
+        cache_key = _analytics_cache_key(
+            org_id, "trends",
+            period=period, granularity=granularity, user_id=effective_user_id or 0,
         )
-        # Also include peak hours data for the heatmap
-        peak = get_peak_hours(db, models, org_id, period=period, user_id=effective_user_id)
+        cached = _analytics_cache_get(cache_key)
+        if cached is not None:
+            return AnalyticsTrends(**cached)
+
+        data = get_appointment_trends(
+            db, models, org_id, period=period, granularity=granularity,
+            user_id=effective_user_id, user_ids=effective_user_ids,
+        )
+        peak = get_peak_hours(
+            db, models, org_id, period=period,
+            user_id=effective_user_id, user_ids=effective_user_ids,
+        )
         data["peak_hours"] = peak
-        # Include cancellation breakdown
-        cancellation = get_cancellation_rate(db, models, org_id, period=period, user_id=effective_user_id)
+        cancellation = get_cancellation_rate(
+            db, models, org_id, period=period,
+            user_id=effective_user_id, user_ids=effective_user_ids,
+        )
         data["cancellation"] = cancellation
-        # Add effective date range
         eff_start, eff_end = _effective_date_range(period, start_date, end_date)
         data["start_date"] = eff_start
         data["end_date"] = eff_end
+        _analytics_cache_set(cache_key, data)
         return AnalyticsTrends(**data)
     except Exception as e:
         logger.exception(f"Analytics trends failed: {e}")
@@ -325,14 +450,35 @@ async def analytics_by_type(
     if not models:
         raise HTTPException(status_code=503, detail="Scheduler models not available")
 
-    effective_user_id = user_id
-    if user_id and user_id != current_user.id and not _is_scheduler_admin(current_user):
-        raise HTTPException(status_code=403, detail="Only admins can view other users' analytics")
-    if not _is_scheduler_admin(current_user):
+    effective_user_id = None
+    effective_user_ids = None
+
+    if _is_scheduler_admin(current_user):
+        if user_id and user_id != current_user.id:
+            effective_user_id = user_id
+        elif user_id == current_user.id:
+            effective_user_id = current_user.id
+    elif _is_branch_manager(current_user):
+        if user_id and user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Branch managers cannot view arbitrary users' analytics")
+        managed = _get_managed_user_ids(current_user.id, org_id, db)
+        effective_user_ids = [int(uid) for uid in managed]
+    else:
         effective_user_id = current_user.id
 
     try:
-        data = get_by_type_breakdown(db, models, org_id, period=period, user_id=effective_user_id)
+        cache_key = _analytics_cache_key(
+            org_id, "by_type", period=period, user_id=effective_user_id or 0,
+        )
+        cached = _analytics_cache_get(cache_key)
+        if cached is not None:
+            data = cached
+        else:
+            data = get_by_type_breakdown(
+                db, models, org_id, period=period,
+                user_id=effective_user_id, user_ids=effective_user_ids,
+            )
+            _analytics_cache_set(cache_key, data)
         all_types = data.get("types", [])
         total_count = len(all_types)
         total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
@@ -381,11 +527,18 @@ async def analytics_by_lo(
     if not models:
         raise HTTPException(status_code=503, detail="Scheduler models not available")
 
-    if not _is_scheduler_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required for team analytics")
+    # Admins see all LOs; branch managers see their direct reports; others are blocked
+    effective_user_ids = None
+    if _is_scheduler_admin(current_user):
+        effective_user_ids = None  # org-wide
+    elif _is_branch_manager(current_user):
+        managed = _get_managed_user_ids(current_user.id, org_id, db)
+        effective_user_ids = [int(uid) for uid in managed]
+    else:
+        raise HTTPException(status_code=403, detail="Admin or branch manager access required for team analytics")
 
     try:
-        data = get_by_lo_breakdown(db, models, org_id, period=period)
+        data = get_by_lo_breakdown(db, models, org_id, period=period, user_ids=effective_user_ids)
         all_los = data.get("loan_officers", [])
         total_count = len(all_los)
         total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
@@ -405,3 +558,190 @@ async def analytics_by_lo(
     except Exception as e:
         logger.exception(f"Analytics by-lo failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to compute LO breakdown")
+
+
+# =============================================================================
+# CSV EXPORT (admin only)
+# =============================================================================
+
+@router.get("/analytics/export/csv")
+@require_feature_tier("scheduler_analytics")
+async def analytics_export_csv(
+    request: Request,
+    start_date: date_type = Query(..., description="Export start date (YYYY-MM-DD)"),
+    end_date: date_type = Query(..., description="Export end date (YYYY-MM-DD)"),
+    report_type: str = Query(
+        "appointments",
+        pattern="^(overview|appointments|by_lo|by_type)$",
+        description="Report type: overview, appointments, by_lo, by_type",
+    ),
+    db: Session = Depends(get_db),
+):
+    """Export appointment analytics as a CSV file (admin only)."""
+    current_user = await get_current_user(request, db)
+    org_id = _get_org_id(current_user)
+
+    if not _is_scheduler_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required for CSV export")
+
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="start_date must be on or before end_date")
+
+    models = get_models()
+    if not models:
+        raise HTTPException(status_code=503, detail="Scheduler models not available")
+
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        start_str = start_date.isoformat()
+        end_str = end_date.isoformat()
+
+        days = (end_date - start_date).days
+        period = "7d" if days <= 7 else ("30d" if days <= 30 else "90d")
+
+        if report_type == "appointments":
+            _write_appointments_csv(writer, db, models, org_id, start_date, end_date)
+
+        elif report_type == "by_lo":
+            data = get_by_lo_breakdown(db, models, org_id, period=period)
+            writer.writerow(["lo_name", "total", "completed", "cancelled", "no_shows", "show_rate"])
+            for lo in data.get("loan_officers", []):
+                total = lo.get("total", 0)
+                no_shows = lo.get("no_shows", 0)
+                show_rate = round(((total - no_shows) / total) * 100, 1) if total > 0 else 0.0
+                writer.writerow([
+                    lo.get("name", ""), total, lo.get("completed", 0),
+                    lo.get("cancelled", 0), no_shows, show_rate,
+                ])
+
+        elif report_type == "by_type":
+            data = get_by_type_breakdown(db, models, org_id, period=period)
+            writer.writerow(["type_name", "total", "completed", "cancelled", "no_shows", "avg_duration_minutes", "show_rate"])
+            for t in data.get("types", []):
+                total = t.get("total", 0)
+                no_shows = t.get("no_shows", 0)
+                show_rate = round(((total - no_shows) / total) * 100, 1) if total > 0 else 0.0
+                writer.writerow([
+                    t.get("type_name", ""), total, t.get("completed", 0),
+                    t.get("cancelled", 0), no_shows, t.get("avg_duration", 0.0), show_rate,
+                ])
+
+        else:  # overview
+            data = get_overview_metrics(db, models, org_id, period=period)
+            writer.writerow([
+                "period", "start_date", "end_date", "total_appointments",
+                "completed", "cancelled", "no_shows", "rescheduled",
+                "completion_rate", "avg_duration_minutes", "utilization_rate",
+                "busiest_day_of_week", "busiest_hour",
+            ])
+            writer.writerow([
+                period, start_str, end_str,
+                data.get("total_appointments", 0), data.get("completed", 0),
+                data.get("cancelled", 0), data.get("no_shows", 0),
+                data.get("rescheduled", 0), data.get("completion_rate", 0.0),
+                data.get("avg_duration_minutes", 0.0), data.get("utilization_rate", 0.0),
+                data.get("busiest_day_of_week", ""), data.get("busiest_hour", ""),
+            ])
+
+        filename = f"appointments-{start_str}-{end_str}.csv"
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Analytics CSV export failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate CSV export")
+
+
+def _write_appointments_csv(
+    writer,
+    db: Session,
+    models: dict,
+    org_id: int,
+    start_date: date_type,
+    end_date: date_type,
+) -> None:
+    """Write raw appointment rows for the date range to the CSV writer."""
+    from datetime import datetime as dt
+    from sqlalchemy import and_
+
+    Appointment = models.get("Appointment")
+    AppointmentType = models.get("AppointmentType")
+    if not Appointment:
+        writer.writerow(["error"])
+        writer.writerow(["Appointment model not available"])
+        return
+
+    writer.writerow([
+        "date", "lo_name", "attendee_name", "appointment_type",
+        "status", "duration_minutes", "source",
+    ])
+
+    type_names: dict = {}
+    if AppointmentType:
+        try:
+            types = db.query(AppointmentType).filter(
+                AppointmentType.organization_id == org_id,
+                AppointmentType.is_active == True,
+            ).all()
+            type_names = {t.id: t.type_name for t in types}
+        except Exception:
+            pass
+
+    user_names: dict = {}
+    try:
+        from database.models.core import User
+        users = db.query(User.id, User.first_name, User.last_name).filter(
+            User.organization_id == org_id,
+        ).all()
+        user_names = {
+            u.id: f"{u.first_name or ''} {u.last_name or ''}".strip() or f"User {u.id}"
+            for u in users
+        }
+    except Exception:
+        pass
+
+    start_dt = dt.combine(start_date, dt.min.time())
+    end_dt = dt.combine(end_date, dt.max.time())
+
+    rows = db.query(
+        Appointment.id,
+        Appointment.scheduled_start,
+        Appointment.assigned_user_id,
+        Appointment.attendee_name,
+        Appointment.appointment_type_id,
+        Appointment.status,
+        Appointment.duration_minutes,
+        Appointment.external_source,
+        Appointment.booked_by_ai,
+    ).filter(
+        and_(
+            Appointment.organization_id == org_id,
+            Appointment.scheduled_start >= start_dt,
+            Appointment.scheduled_start <= end_dt,
+            Appointment.deleted_at.is_(None),
+        )
+    ).order_by(Appointment.scheduled_start).all()
+
+    for row in rows:
+        date_str = row.scheduled_start.date().isoformat() if row.scheduled_start else ""
+        lo_name = user_names.get(row.assigned_user_id, f"User {row.assigned_user_id}") if row.assigned_user_id else ""
+
+        raw_name = row.attendee_name or ""
+        if raw_name:
+            parts = raw_name.split()
+            masked_name = f"{parts[0]} {parts[-1][0]}." if len(parts) >= 2 else (parts[0] if parts else "")
+        else:
+            masked_name = ""
+
+        type_name = type_names.get(row.appointment_type_id, "Unassigned") if row.appointment_type_id else "Unassigned"
+        status = row.status.value if hasattr(row.status, "value") else str(row.status or "")
+        source = row.external_source or ("ai" if row.booked_by_ai else "manual")
+
+        writer.writerow([date_str, lo_name, masked_name, type_name, status, row.duration_minutes or 0, source])
