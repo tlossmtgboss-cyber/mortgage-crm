@@ -73,6 +73,18 @@ def run_migration(engine=None) -> None:
             ALTER TABLE recruit_landing_pages ENABLE ROW LEVEL SECURITY;
             ALTER TABLE recruit_landing_pages FORCE ROW LEVEL SECURITY;
 
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.table_constraints
+                    WHERE table_name = 'recruit_landing_pages'
+                      AND constraint_name = 'uq_recruit_landing_pages_org_slug'
+                ) THEN
+                    ALTER TABLE recruit_landing_pages
+                    ADD CONSTRAINT uq_recruit_landing_pages_org_slug
+                    UNIQUE (organization_id, slug);
+                END IF;
+            END $$;
+
             DROP POLICY IF EXISTS recruit_lp_tenant_isolation ON recruit_landing_pages;
             CREATE POLICY recruit_lp_tenant_isolation ON recruit_landing_pages
                 USING (
