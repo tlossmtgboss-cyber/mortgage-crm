@@ -84,6 +84,10 @@ class AIAnalysisType(str, enum.Enum):
 # MODEL FACTORY
 # ============================================================================
 
+from model_cache import base_memoize
+
+
+@base_memoize
 def create_video_meeting_models(Base):
     """
     Factory function to create video meeting models with the provided SQLAlchemy Base.

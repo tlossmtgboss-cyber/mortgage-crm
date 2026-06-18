@@ -352,11 +352,14 @@ async def refresh_microsoft_token(
         if not row or not row.refresh_token:
             raise HTTPException(status_code=404, detail=f"No {provider} connection found")
 
-        # Refresh the token
-        token_data = microsoft_outlook_client.refresh_access_token(row.refresh_token)
+        # Refresh the token (async — does not block the event loop)
+        token_data = await microsoft_outlook_client.refresh_access_token_async(row.refresh_token)
 
         if not token_data:
-            raise HTTPException(status_code=500, detail="Failed to refresh token")
+            raise HTTPException(
+                status_code=401,
+                detail="Outlook token has expired or been revoked. Please reconnect in Settings.",
+            )
 
         # Update stored tokens
         db.execute(text("""
@@ -445,27 +448,35 @@ async def list_calendar_events(
 
     access_token = row.access_token
 
-    # Check if token is expired and refresh if needed
-    if row.expires_at and datetime.now(timezone.utc) > row.expires_at:
-        token_data = microsoft_outlook_client.refresh_access_token(row.refresh_token)
-        if token_data:
-            access_token = token_data["access_token"]
-            db.execute(text("""
-                UPDATE user_integrations
-                SET access_token = :access_token,
-                    refresh_token = :refresh_token,
-                    expires_at = :expires_at,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE user_id = :user_id AND provider = 'outlook_calendar'
-            """), {
-                "user_id": user_id,
-                "access_token": token_data.get("access_token"),
-                "refresh_token": token_data.get("refresh_token"),
-                "expires_at": token_data.get("expires_at")
-            })
-            db.commit()
+    # Proactive refresh: if token is expiring within 5 minutes, refresh now
+    if row.expires_at:
+        expires_at = row.expires_at
+        if hasattr(expires_at, 'tzinfo') and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        refresh_threshold = datetime.now(timezone.utc) + timedelta(minutes=5)
+        if expires_at <= refresh_threshold:
+            token_data = await microsoft_outlook_client.refresh_access_token_async(row.refresh_token)
         else:
-            raise HTTPException(status_code=401, detail="Token expired and refresh failed")
+            token_data = None
+    else:
+        token_data = None
+    if token_data:
+        access_token = token_data["access_token"]
+        db.execute(text("""
+            UPDATE user_integrations
+            SET access_token = :access_token,
+                refresh_token = :refresh_token,
+                expires_at = :expires_at,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = :user_id AND provider = 'outlook_calendar'
+        """), {
+            "user_id": user_id,
+            "access_token": token_data.get("access_token"),
+            "refresh_token": token_data.get("refresh_token"),
+            "expires_at": token_data.get("expires_at"),
+        })
+        db.commit()
+        logger.info("Proactively refreshed Outlook calendar token for user %s", user_id)
 
     start_time = datetime.now(timezone.utc)
     end_time = start_time + timedelta(days=days)
@@ -544,27 +555,35 @@ async def list_email_messages(
 
     access_token = row.access_token
 
-    # Check if token is expired and refresh if needed
-    if row.expires_at and datetime.now(timezone.utc) > row.expires_at:
-        token_data = microsoft_outlook_client.refresh_access_token(row.refresh_token)
-        if token_data:
-            access_token = token_data["access_token"]
-            db.execute(text("""
-                UPDATE user_integrations
-                SET access_token = :access_token,
-                    refresh_token = :refresh_token,
-                    expires_at = :expires_at,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE user_id = :user_id AND provider = 'outlook_email'
-            """), {
-                "user_id": user_id,
-                "access_token": token_data.get("access_token"),
-                "refresh_token": token_data.get("refresh_token"),
-                "expires_at": token_data.get("expires_at")
-            })
-            db.commit()
-        else:
-            raise HTTPException(status_code=401, detail="Token expired and refresh failed")
+    # Proactive refresh: if token is expiring within 5 minutes, refresh now
+    if row.expires_at:
+        _expires = row.expires_at
+        if hasattr(_expires, 'tzinfo') and _expires.tzinfo is None:
+            _expires = _expires.replace(tzinfo=timezone.utc)
+        if _expires <= datetime.now(timezone.utc) + timedelta(minutes=5):
+            token_data = await microsoft_outlook_client.refresh_access_token_async(row.refresh_token)
+            if token_data:
+                access_token = token_data["access_token"]
+                db.execute(text("""
+                    UPDATE user_integrations
+                    SET access_token = :access_token,
+                        refresh_token = :refresh_token,
+                        expires_at = :expires_at,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = :user_id AND provider = 'outlook_email'
+                """), {
+                    "user_id": user_id,
+                    "access_token": token_data.get("access_token"),
+                    "refresh_token": token_data.get("refresh_token"),
+                    "expires_at": token_data.get("expires_at"),
+                })
+                db.commit()
+                logger.info("Proactively refreshed Outlook email token for user %s", user_id)
+            else:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Outlook token has expired or been revoked. Please reconnect in Settings.",
+                )
 
     messages = microsoft_outlook_client.list_messages(access_token, folder=folder, top=top, filter_unread=unread_only)
 
@@ -633,27 +652,35 @@ async def sync_outlook_emails(
 
     access_token = row.access_token
 
-    # Check if token is expired and refresh if needed
-    if row.expires_at and datetime.now(timezone.utc) > row.expires_at:
-        token_data = microsoft_outlook_client.refresh_access_token(row.refresh_token)
-        if token_data:
-            access_token = token_data["access_token"]
-            db.execute(text("""
-                UPDATE user_integrations
-                SET access_token = :access_token,
-                    refresh_token = :refresh_token,
-                    expires_at = :expires_at,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE user_id = :user_id AND provider = 'outlook_email'
-            """), {
-                "user_id": user_id,
-                "access_token": token_data.get("access_token"),
-                "refresh_token": token_data.get("refresh_token"),
-                "expires_at": token_data.get("expires_at")
-            })
-            db.commit()
-        else:
-            raise HTTPException(status_code=401, detail="Token expired and refresh failed")
+    # Proactive refresh: if token is expiring within 5 minutes, refresh now
+    if row.expires_at:
+        _expires = row.expires_at
+        if hasattr(_expires, 'tzinfo') and _expires.tzinfo is None:
+            _expires = _expires.replace(tzinfo=timezone.utc)
+        if _expires <= datetime.now(timezone.utc) + timedelta(minutes=5):
+            token_data = await microsoft_outlook_client.refresh_access_token_async(row.refresh_token)
+            if token_data:
+                access_token = token_data["access_token"]
+                db.execute(text("""
+                    UPDATE user_integrations
+                    SET access_token = :access_token,
+                        refresh_token = :refresh_token,
+                        expires_at = :expires_at,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = :user_id AND provider = 'outlook_email'
+                """), {
+                    "user_id": user_id,
+                    "access_token": token_data.get("access_token"),
+                    "refresh_token": token_data.get("refresh_token"),
+                    "expires_at": token_data.get("expires_at"),
+                })
+                db.commit()
+                logger.info("Proactively refreshed Outlook email token for user %s", user_id)
+            else:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Outlook token has expired or been revoked. Please reconnect in Settings.",
+                )
 
     # Fetch recent emails (last 50 unread + recent)
     messages = microsoft_outlook_client.list_messages(access_token, folder="inbox", top=50)

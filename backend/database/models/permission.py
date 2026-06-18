@@ -205,6 +205,26 @@ class Responsibility(Base):
     user_responsibilities = relationship("UserResponsibility", back_populates="responsibility")
 
 
+class Role(Base):
+    """Canonical RBAC/team role (Loan Officer, Processor, etc.).
+
+    Mapped to the existing `roles` table. This is the `Role` that
+    workflow_sla.LeadWorkflowRoleAssignment.role (FK -> roles.id) resolves to.
+    Schema mirrors the production `roles` table.
+    """
+    __tablename__ = "roles"
+    __table_args__ = {'extend_existing': True}
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    code = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, nullable=True, default=True)
+    created_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=True, server_default=func.now(), onupdate=func.now())
+    abbreviation = Column(String, nullable=True)
+
+
 class RoleResponsibility(Base):
     """Default responsibilities assigned per role."""
     __tablename__ = "role_responsibilities"

@@ -53,6 +53,22 @@ def _resolve_date_range(period: str) -> Tuple[datetime, datetime]:
     return start, now
 
 
+def _apply_user_scope(filters: list, model, user_id: Optional[int], user_ids: Optional[List[int]]):
+    """
+    Append the appropriate user-scope filter to an existing filter list.
+
+    - user_ids (list): branch-manager view — filter to IN (user_ids)
+    - user_id (int): single-user view — exact match
+    - neither: org-wide view (no extra filter)
+
+    user_ids takes precedence over user_id when both are supplied.
+    """
+    if user_ids is not None:
+        filters.append(model.assigned_user_id.in_(user_ids))
+    elif user_id:
+        filters.append(model.assigned_user_id == user_id)
+
+
 def _get_appointment_model(models: dict):
     """Get Appointment model from models dict."""
     return models.get("Appointment")
@@ -68,11 +84,16 @@ def get_overview_metrics(
     org_id: int,
     period: str = "30d",
     user_id: Optional[int] = None,
+    user_ids: Optional[List[int]] = None,
 ) -> dict:
     """
     Calculate top-level KPI metrics:
     total_appointments, completed, cancelled, no_shows, rescheduled,
     avg_duration_minutes, utilization_rate, busiest_day_of_week, busiest_hour.
+
+    user_ids (list): branch-manager scoping — filter to a set of users.
+    user_id (int): single-user scoping.
+    Neither: org-wide view.
     """
     Appointment = _get_appointment_model(models)
     if not Appointment:
@@ -85,8 +106,7 @@ def get_overview_metrics(
         Appointment.scheduled_start >= start,
         Appointment.scheduled_start <= end,
     ]
-    if user_id:
-        filters.append(Appointment.assigned_user_id == user_id)
+    _apply_user_scope(filters, Appointment, user_id, user_ids)
 
     # Core counts
     row = db.query(
@@ -135,7 +155,7 @@ def get_overview_metrics(
     busiest_hour = int(busiest_hour_row.hr) if busiest_hour_row else None
 
     # Utilization rate
-    utilization = calculate_utilization(db, models, org_id, start, end, user_id=user_id)
+    utilization = calculate_utilization(db, models, org_id, start, end, user_id=user_id, user_ids=user_ids)
 
     completion_rate = round((completed / total) * 100, 1) if total > 0 else 0
 
@@ -166,10 +186,14 @@ def calculate_utilization(
     start: datetime,
     end: datetime,
     user_id: Optional[int] = None,
+    user_ids: Optional[List[int]] = None,
 ) -> float:
     """
     Calculate utilization: total booked minutes / total available minutes * 100.
     Available hours estimated from SchedulerConfig working hours.
+
+    user_ids: branch-manager scoping (filter to set of users).
+    user_id: single-user scoping.
     """
     Appointment = _get_appointment_model(models)
     SchedulerConfig = models.get("SchedulerConfig")
@@ -182,8 +206,7 @@ def calculate_utilization(
         Appointment.scheduled_start <= end,
         Appointment.status.notin_([AppointmentStatus.CANCELLED.value]),
     ]
-    if user_id:
-        filters.append(Appointment.assigned_user_id == user_id)
+    _apply_user_scope(filters, Appointment, user_id, user_ids)
 
     booked_minutes_row = db.query(
         func.sum(Appointment.duration_minutes).label("total_minutes"),
@@ -363,10 +386,13 @@ def get_appointment_trends(
     period: str = "30d",
     granularity: str = "daily",
     user_id: Optional[int] = None,
+    user_ids: Optional[List[int]] = None,
 ) -> dict:
     """
     Time-series data of appointment counts.
     Returns {labels: [...], datasets: {total: [...], completed: [...], cancelled: [...]}}.
+
+    user_ids: branch-manager scoping. user_id: single-user scoping.
     """
     Appointment = _get_appointment_model(models)
     if not Appointment:
@@ -379,8 +405,7 @@ def get_appointment_trends(
         Appointment.scheduled_start >= start,
         Appointment.scheduled_start <= end,
     ]
-    if user_id:
-        filters.append(Appointment.assigned_user_id == user_id)
+    _apply_user_scope(filters, Appointment, user_id, user_ids)
 
     if granularity == "weekly":
         # Group by ISO week
@@ -443,10 +468,13 @@ def get_peak_hours(
     org_id: int,
     period: str = "30d",
     user_id: Optional[int] = None,
+    user_ids: Optional[List[int]] = None,
 ) -> dict:
     """
     Histogram of appointments by day-of-week and hour.
     Returns a 7x24 grid: {grid: [{day, hour, count}, ...], max_count}.
+
+    user_ids: branch-manager scoping. user_id: single-user scoping.
     """
     Appointment = _get_appointment_model(models)
     if not Appointment:
@@ -459,8 +487,7 @@ def get_peak_hours(
         Appointment.scheduled_start >= start,
         Appointment.scheduled_start <= end,
     ]
-    if user_id:
-        filters.append(Appointment.assigned_user_id == user_id)
+    _apply_user_scope(filters, Appointment, user_id, user_ids)
 
     rows = db.query(
         extract("dow", Appointment.scheduled_start).label("dow"),
@@ -510,9 +537,12 @@ def get_cancellation_rate(
     org_id: int,
     period: str = "30d",
     user_id: Optional[int] = None,
+    user_ids: Optional[List[int]] = None,
 ) -> dict:
     """
     Cancellation % with breakdown by reason.
+
+    user_ids: branch-manager scoping. user_id: single-user scoping.
     """
     Appointment = _get_appointment_model(models)
     if not Appointment:
@@ -525,8 +555,7 @@ def get_cancellation_rate(
         Appointment.scheduled_start >= start,
         Appointment.scheduled_start <= end,
     ]
-    if user_id:
-        filters.append(Appointment.assigned_user_id == user_id)
+    _apply_user_scope(filters, Appointment, user_id, user_ids)
 
     total = db.query(func.count(Appointment.id)).filter(and_(*filters)).scalar() or 0
 
@@ -565,8 +594,12 @@ def get_by_type_breakdown(
     org_id: int,
     period: str = "30d",
     user_id: Optional[int] = None,
+    user_ids: Optional[List[int]] = None,
 ) -> dict:
-    """Appointment counts grouped by appointment type."""
+    """Appointment counts grouped by appointment type.
+
+    user_ids: branch-manager scoping. user_id: single-user scoping.
+    """
     Appointment = _get_appointment_model(models)
     AppointmentType = models.get("AppointmentType")
     if not Appointment:
@@ -579,8 +612,7 @@ def get_by_type_breakdown(
         Appointment.scheduled_start >= start,
         Appointment.scheduled_start <= end,
     ]
-    if user_id:
-        filters.append(Appointment.assigned_user_id == user_id)
+    _apply_user_scope(filters, Appointment, user_id, user_ids)
 
     query = db.query(
         Appointment.appointment_type_id,
@@ -643,8 +675,13 @@ def get_by_lo_breakdown(
     models: dict,
     org_id: int,
     period: str = "30d",
+    user_ids: Optional[List[int]] = None,
 ) -> dict:
-    """Appointment counts grouped by loan officer (assigned_user_id)."""
+    """Appointment counts grouped by loan officer (assigned_user_id).
+
+    user_ids: branch-manager scoping — restrict to these user IDs.
+    When None (default), returns all users in the org (org-admin view).
+    """
     Appointment = _get_appointment_model(models)
     if not Appointment:
         return {"loan_officers": []}
@@ -656,6 +693,8 @@ def get_by_lo_breakdown(
         Appointment.scheduled_start >= start,
         Appointment.scheduled_start <= end,
     ]
+    if user_ids is not None:
+        filters.append(Appointment.assigned_user_id.in_(user_ids))
 
     rows = db.query(
         Appointment.assigned_user_id,

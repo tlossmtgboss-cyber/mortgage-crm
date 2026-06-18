@@ -7,6 +7,7 @@ import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta, timezone
 import requests
+import httpx
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
@@ -160,7 +161,7 @@ class MicrosoftOutlookClient:
             return None
 
     def refresh_access_token(self, refresh_token: str) -> Optional[Dict[str, Any]]:
-        """Refresh an expired access token"""
+        """Refresh an expired access token (synchronous — use refresh_access_token_async in async contexts)."""
         if not self.enabled:
             return None
 
@@ -195,6 +196,66 @@ class MicrosoftOutlookClient:
 
         except Exception as e:
             logger.error(f"Error refreshing Microsoft access token: {e}")
+            return None
+
+    async def refresh_access_token_async(self, refresh_token: str) -> Optional[Dict[str, Any]]:
+        """Async version of refresh_access_token — does not block the event loop.
+
+        Use this in all async FastAPI route handlers and services.
+        Falls back to None (not raises) to preserve existing caller semantics.
+        """
+        if not self.enabled:
+            return None
+
+        data = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    self.token_url,
+                    data=data,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+
+            if response.status_code == 400:
+                # Typically means the refresh token is expired/revoked
+                error_data = {}
+                try:
+                    error_data = response.json()
+                except Exception:
+                    pass
+                error_desc = error_data.get("error_description", response.text[:200])
+                logger.warning(
+                    "Microsoft token refresh rejected (token likely revoked): %s", error_desc
+                )
+                return None
+
+            response.raise_for_status()
+
+            token_data = response.json()
+            logger.info("Successfully refreshed Microsoft access token (async)")
+
+            expires_in = token_data.get("expires_in", 3600)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+
+            return {
+                "access_token": token_data.get("access_token"),
+                "refresh_token": token_data.get("refresh_token"),
+                "expires_in": expires_in,
+                "expires_at": expires_at.isoformat(),
+                "token_type": token_data.get("token_type", "Bearer"),
+            }
+
+        except httpx.HTTPStatusError as e:
+            logger.error("Microsoft token refresh HTTP error: %s", e)
+            return None
+        except Exception as e:
+            logger.error("Error refreshing Microsoft access token (async): %s", e)
             return None
 
     def get_user_info(self, access_token: str) -> Optional[Dict[str, Any]]:

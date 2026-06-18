@@ -29,6 +29,76 @@ from routes.scheduler._core import get_models
 logger = logging.getLogger(__name__)
 
 
+# ============================================================================
+# REDIS AVAILABILITY CACHE HELPERS
+# ============================================================================
+# Cache key pattern: avail:{org_id}:{user_id}:{date_str}
+# TTL: 120 seconds
+# All Redis calls are wrapped in try/except — cache failures never break
+# the availability computation.
+
+_AVAIL_CACHE_TTL = 120  # seconds
+
+
+def invalidate_availability_cache(org_id: int, user_id: int) -> None:
+    """Delete all availability cache entries for a given (org_id, user_id) pair.
+
+    Uses SCAN+DEL so Redis is never blocked with a KEYS call.
+    Pattern: ``avail:{org_id}:{user_id}:*``
+
+    Called after any write to AvailabilitySlot, BlockedTime, or Appointment
+    rows that affect the user's schedule.  Safe to call even when Redis is
+    unavailable — failures are logged as warnings and silently swallowed.
+    """
+    try:
+        from services.redis_service import redis_service
+        r = redis_service.get_client()
+        if r is None:
+            return
+        pattern = f"avail:{org_id}:{user_id}:*"
+        cursor = 0
+        deleted = 0
+        while True:
+            cursor, keys = r.scan(cursor=cursor, match=pattern, count=100)
+            if keys:
+                r.delete(*keys)
+                deleted += len(keys)
+            if cursor == 0:
+                break
+        if deleted:
+            logger.debug(
+                "Availability cache: invalidated %d key(s) for org=%s user=%s",
+                deleted, org_id, user_id,
+            )
+    except Exception as exc:
+        logger.warning(
+            "Availability cache: invalidation failed for org=%s user=%s (non-blocking): %s",
+            org_id, user_id, exc,
+        )
+
+
+def _avail_cache_get(r, key: str):
+    """Fetch a JSON-encoded list from Redis. Returns None on any error."""
+    try:
+        import json as _json
+        raw = r.get(key)
+        if raw is None:
+            return None
+        return _json.loads(raw)
+    except Exception as exc:
+        logger.warning("Availability cache GET failed for key=%s: %s", key, exc)
+        return None
+
+
+def _avail_cache_set(r, key: str, value: list) -> None:
+    """Serialize and store a slot list in Redis with TTL. Swallows errors."""
+    try:
+        import json as _json
+        r.setex(key, _AVAIL_CACHE_TTL, _json.dumps(value))
+    except Exception as exc:
+        logger.warning("Availability cache SET failed for key=%s: %s", key, exc)
+
+
 def _is_missing_table_error(ex: Exception) -> bool:
     """Check if an exception indicates a missing/undefined table or column.
 

@@ -342,6 +342,11 @@ class SchedulerAppointmentType(Base):
     is_public = Column(Boolean, default=True)  # Can be booked via public link
     public_slug = Column(String(100), nullable=True)  # Per-org unique via __table_args__
 
+    # Per-type SLA target overrides (highest priority — overrides org-level and system defaults).
+    # Example: {"time_to_first_appointment_hours": 24, "post_appointment_followup_hours": 48}
+    # Keys must match known SLA target keys in DEFAULT_SLA_TARGETS.
+    sla_targets = Column(JSON, nullable=True)
+
     # Status
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -476,6 +481,10 @@ class Appointment(Base):
     # Format: {"utm_source": "...", "utm_medium": "...", "utm_campaign": "...",
     #          "utm_term": "...", "utm_content": "...", "referrer": "..."}
     booking_attribution = Column(JSON, nullable=True)
+
+    # Soft-delete support — NULL = active; non-NULL = soft-deleted at that timestamp.
+    # Use DELETE /appointments/{id} to soft-delete; hard-deletes are prohibited.
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     # Metadata
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -788,6 +797,10 @@ class SchedulerAuditLog(Base):
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    # Hash chain columns — populated by DB trigger (scheduler_audit_hash_chain).
+    # nullable=True so pre-migration rows are not rejected.
+    row_hash = Column(String(64), nullable=True)
+    prev_hash = Column(String(64), nullable=True)
 
 
 class SlotHold(Base):

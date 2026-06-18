@@ -25,6 +25,23 @@ logger = logging.getLogger(__name__)
 _DEGRADED_BUDGET_FRACTION = 0.25
 
 
+def _degraded_hard_cap() -> int:
+    """Absolute per-replica token ceiling when Redis is unavailable in prod.
+
+    Without Redis we cannot coordinate spend across an unknown number of
+    replicas, so beyond the fraction-based degraded budget we also enforce an
+    ABSOLUTE hard cap. Once a replica hits this ceiling it fails CLOSED (denies)
+    regardless of the configured per-org budget — bounding worst-case multi-
+    replica overspend during a Redis outage.
+
+    Configurable via AI_DEGRADED_HARD_CAP_TOKENS (default 100k tokens/replica/period).
+    """
+    try:
+        return max(0, int(os.getenv("AI_DEGRADED_HARD_CAP_TOKENS", "100000")))
+    except (TypeError, ValueError):
+        return 100_000
+
+
 def _is_production() -> bool:
     """Check if running in production (Railway or ENVIRONMENT=production)."""
     return bool(
@@ -125,9 +142,15 @@ class TokenBudget:
         self._usage: Dict[int, OrgUsage] = defaultdict(OrgUsage)
         self._lock = Lock()
 
-        # Effective budget when in degraded (in-memory) mode
+        # Effective budget when in degraded (in-memory) mode.
+        # In production without Redis, take the MIN of the fraction-based
+        # budget and an absolute hard cap so worst-case multi-replica spend is
+        # bounded and the limiter fails CLOSED once the cap is hit.
         if _is_production() and not self._redis_available:
-            self._degraded_max = int(max_tokens_per_org * _DEGRADED_BUDGET_FRACTION)
+            self._degraded_max = min(
+                int(max_tokens_per_org * _DEGRADED_BUDGET_FRACTION),
+                _degraded_hard_cap(),
+            )
         else:
             self._degraded_max = max_tokens_per_org
 
@@ -159,11 +182,15 @@ class TokenBudget:
         if self._redis_available:
             self._redis_available = False
             if _is_production():
-                self._degraded_max = int(self.max_tokens_per_org * _DEGRADED_BUDGET_FRACTION)
+                self._degraded_max = min(
+                    int(self.max_tokens_per_org * _DEGRADED_BUDGET_FRACTION),
+                    _degraded_hard_cap(),
+                )
                 logger.critical(
                     f"[TOKEN_BUDGET] Redis failed during {operation}: {error}. "
                     f"Switching to CONSERVATIVE in-memory fallback "
-                    f"({self._degraded_max}/{self.max_tokens_per_org} tokens per replica)."
+                    f"({self._degraded_max}/{self.max_tokens_per_org} tokens per replica, "
+                    f"hard cap {_degraded_hard_cap()})."
                 )
             else:
                 self._degraded_max = self.max_tokens_per_org

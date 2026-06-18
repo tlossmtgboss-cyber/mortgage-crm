@@ -190,6 +190,17 @@ def _populate_registry():
         lock_ttl=300,
     ))
 
+
+    jobs.append(JobDefinition(
+        name="calendar_feed_cleanup",
+        func=_svc.cleanup_expired_calendar_feeds,
+        trigger="cron",
+        trigger_kwargs={"hour": 2, "minute": 45},
+        domain="cleanup",
+        description="Delete expired calendar feed tokens (expires_at < NOW())",
+        lock_ttl=60,
+    ))
+
     # ====================================================================
     # 4. SYNC JOBS
     # ====================================================================

@@ -46,6 +46,8 @@ from routes.scheduler._helpers import (
     _audit_log, _validate_url, _mask_email,
 )
 from routes.scheduler.public_booking import _sanitize_ai_context
+from routes.scheduler._pii import apply_pii_mask
+from auth.scope_enforcement import require_scope
 from routes.scheduler.error_responses import (
     scheduler_error,
     VALIDATION_ERROR, NOT_FOUND, FORBIDDEN,
@@ -211,7 +213,8 @@ async def list_appointments(
     loan_id: Optional[int] = None,
     limit: int = Query(default=50, ge=1, le=200, description="Page size"),
     offset: int = Query(default=0, ge=0, description="Page offset"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _scope=Depends(require_scope("read:appointments")),
 ):
     """List appointments with filters."""
     user = await get_current_user(request, db)
@@ -224,6 +227,7 @@ async def list_appointments(
     is_admin = _is_scheduler_admin(user)
     query = db.query(Appointment).filter(
         Appointment.organization_id == org_id,
+        Appointment.deleted_at.is_(None),
     )
     if not is_admin:
         query = query.filter(
@@ -267,26 +271,30 @@ async def list_appointments(
 
     appointments = query.order_by(Appointment.scheduled_start.desc()).offset(offset).limit(limit).all()
 
-    # Convert main appointments to response format
+    # Convert main appointments to response format, masking PII for non-owners
     result_appointments = [
-        {
-            "id": a.id,
-            "title": a.title,
-            "description": a.description,
-            "meeting_type": a.meeting_type.value if a.meeting_type else None,
-            "meeting_mode": a.meeting_mode.value if a.meeting_mode else None,
-            "scheduled_start": a.scheduled_start.isoformat(),
-            "scheduled_end": a.scheduled_end.isoformat(),
-            "duration_minutes": a.duration_minutes,
-            "status": a.status.value if a.status else None,
-            "attendee_name": a.attendee_name,
-            "attendee_email": a.attendee_email,
-            "video_link": a.video_link,
-            "lead_id": a.lead_id,
-            "loan_id": a.loan_id,
-            "booked_by_ai": a.booked_by_ai,
-            "created_at": a.created_at.isoformat() if a.created_at else None
-        }
+        apply_pii_mask(
+            {
+                "id": a.id,
+                "title": a.title,
+                "description": a.description,
+                "meeting_type": a.meeting_type.value if a.meeting_type else None,
+                "meeting_mode": a.meeting_mode.value if a.meeting_mode else None,
+                "scheduled_start": a.scheduled_start.isoformat(),
+                "scheduled_end": a.scheduled_end.isoformat(),
+                "duration_minutes": a.duration_minutes,
+                "status": a.status.value if a.status else None,
+                "attendee_name": a.attendee_name,
+                "attendee_email": a.attendee_email,
+                "video_link": a.video_link,
+                "lead_id": a.lead_id,
+                "loan_id": a.loan_id,
+                "booked_by_ai": a.booked_by_ai,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            },
+            user,
+            a,
+        )
         for a in appointments
     ]
 
@@ -359,6 +367,7 @@ async def export_appointments_ics(
         Appointment.organization_id == org_id,
         Appointment.scheduled_start >= start,
         Appointment.scheduled_start <= end,
+        Appointment.deleted_at.is_(None),
         Appointment.status.in_([
             AppointmentStatus.BOOKED,
             AppointmentStatus.CONFIRMED,
@@ -431,7 +440,8 @@ async def export_appointments_ics(
 async def get_appointment(
     appointment_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _scope=Depends(require_scope("read:appointments")),
 ):
     """Get appointment details"""
     user = await get_current_user(request, db)
@@ -445,6 +455,7 @@ async def get_appointment(
     get_query = db.query(Appointment).filter(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
+        Appointment.deleted_at.is_(None),
     )
     if not is_admin:
         get_query = get_query.filter(
@@ -459,37 +470,41 @@ async def get_appointment(
         scheduler_error(404, NOT_FOUND, "Appointment not found")
 
     return {
-        "appointment": {
-            "id": appointment.id,
-            "appointment_type_id": appointment.appointment_type_id,
-            "title": appointment.title,
-            "description": appointment.description,
-            "meeting_type": appointment.meeting_type.value if appointment.meeting_type else None,
-            "meeting_mode": appointment.meeting_mode.value if appointment.meeting_mode else None,
-            "scheduled_start": appointment.scheduled_start.isoformat(),
-            "scheduled_end": appointment.scheduled_end.isoformat(),
-            "duration_minutes": appointment.duration_minutes,
-            "timezone": appointment.timezone,
-            "location": appointment.location,
-            "video_link": appointment.video_link,
-            "phone_number": appointment.phone_number,
-            "attendee_name": appointment.attendee_name,
-            "attendee_email": appointment.attendee_email,
-            "attendee_phone": appointment.attendee_phone,
-            "attendee_notes": appointment.attendee_notes,
-            "intake_responses": appointment.intake_responses,
-            "status": appointment.status.value if appointment.status else None,
-            "lead_id": appointment.lead_id,
-            "loan_id": appointment.loan_id,
-            "contact_id": appointment.contact_id,
-            "assigned_user_id": appointment.assigned_user_id,
-            "booked_by_ai": appointment.booked_by_ai,
-            "ai_booking_context": appointment.ai_booking_context,
-            "internal_notes": appointment.internal_notes,
-            "meeting_notes": appointment.meeting_notes,
-            "created_at": appointment.created_at.isoformat() if appointment.created_at else None,
-            "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None
-        }
+        "appointment": apply_pii_mask(
+            {
+                "id": appointment.id,
+                "appointment_type_id": appointment.appointment_type_id,
+                "title": appointment.title,
+                "description": appointment.description,
+                "meeting_type": appointment.meeting_type.value if appointment.meeting_type else None,
+                "meeting_mode": appointment.meeting_mode.value if appointment.meeting_mode else None,
+                "scheduled_start": appointment.scheduled_start.isoformat(),
+                "scheduled_end": appointment.scheduled_end.isoformat(),
+                "duration_minutes": appointment.duration_minutes,
+                "timezone": appointment.timezone,
+                "location": appointment.location,
+                "video_link": appointment.video_link,
+                "phone_number": appointment.phone_number,
+                "attendee_name": appointment.attendee_name,
+                "attendee_email": appointment.attendee_email,
+                "attendee_phone": appointment.attendee_phone,
+                "attendee_notes": appointment.attendee_notes,
+                "intake_responses": appointment.intake_responses,
+                "status": appointment.status.value if appointment.status else None,
+                "lead_id": appointment.lead_id,
+                "loan_id": appointment.loan_id,
+                "contact_id": appointment.contact_id,
+                "assigned_user_id": appointment.assigned_user_id,
+                "booked_by_ai": appointment.booked_by_ai,
+                "ai_booking_context": appointment.ai_booking_context,
+                "internal_notes": appointment.internal_notes,
+                "meeting_notes": appointment.meeting_notes,
+                "created_at": appointment.created_at.isoformat() if appointment.created_at else None,
+                "updated_at": appointment.updated_at.isoformat() if appointment.updated_at else None,
+            },
+            user,
+            appointment,
+        )
     }
 
 
@@ -501,7 +516,8 @@ async def get_appointment(
 async def get_appointment_timeline(
     appointment_id: int,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _scope=Depends(require_scope("read:appointments")),
 ):
     """Get the full status history timeline for an appointment.
 
@@ -519,6 +535,7 @@ async def get_appointment_timeline(
     timeline_query = db.query(Appointment).filter(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
+        Appointment.deleted_at.is_(None),
     )
     if not is_admin:
         timeline_query = timeline_query.filter(
@@ -633,6 +650,7 @@ async def get_appointment_audit_trail_endpoint(
     appointment = db.query(Appointment).filter(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
+        Appointment.deleted_at.is_(None),
     ).first()
 
     if not appointment:
@@ -666,7 +684,8 @@ async def create_appointment_endpoint(
     appt_data: AppointmentCreate,
     request: Request,
     background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _scope=Depends(require_scope("write:appointments")),
 ):
     """Create a new appointment (authenticated path).
 
@@ -743,6 +762,9 @@ async def create_appointment_endpoint(
             raise HTTPException(status_code=409, detail=result.error)
 
         appointment = result.appointment
+        # Invalidate availability cache for the assigned user
+        from routes.scheduler._availability import invalidate_availability_cache
+        invalidate_availability_cache(org_id=org_id, user_id=assigned_user)
 
         # Surface non-fatal warnings from the shared service (e.g. meeting link failure)
         for warning in result.warnings:
@@ -895,7 +917,8 @@ async def update_appointment(
     appt_data: AppointmentUpdate,
     request: Request,
     background_tasks: BackgroundTasks = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _scope=Depends(require_scope("write:appointments")),
 ):
     """Update an appointment and send notification emails/SMS.
 
@@ -910,7 +933,8 @@ async def update_appointment(
 
     appointment = db.query(Appointment).filter(
         Appointment.id == appointment_id,
-        Appointment.organization_id == org_id
+        Appointment.organization_id == org_id,
+        Appointment.deleted_at.is_(None),
     ).first()
 
     if not appointment:
@@ -1063,6 +1087,9 @@ async def update_appointment(
                booking_source="authenticated")
     db.commit()
     db.refresh(appointment)
+    # Invalidate availability cache for the affected user
+    from routes.scheduler._availability import invalidate_availability_cache
+    invalidate_availability_cache(org_id=org_id, user_id=appointment.assigned_user_id)
 
     # Calendar-Pipeline Bridge: auto-create loan when application appointment completes
     new_status_val = audit_changes.get("status", {}).get("new")
@@ -1333,6 +1360,7 @@ async def cancel_appointment(
     cancel_query = db.query(Appointment).filter(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
+        Appointment.deleted_at.is_(None),
     )
     if not is_admin:
         cancel_query = cancel_query.filter(
@@ -1518,3 +1546,102 @@ async def cancel_appointment(
         "emails_sent": emails_sent,
         "waitlist_offered": waitlist_offered,
     }
+
+
+# ============================================================================
+# DELETE APPOINTMENT (soft-delete)
+# ============================================================================
+
+@router.delete("/appointments/{appointment_id}")
+async def delete_appointment(
+    appointment_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    _scope=Depends(require_scope("write:appointments")),
+):
+    """Soft-delete an appointment.
+
+    Sets deleted_at timestamp instead of removing the row; the record is
+    excluded from all list/get queries but preserved for audit purposes.
+    Only admins or the appointment owner may delete.
+    """
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+
+    _models = get_models()
+    Appointment = _models['Appointment']
+
+    is_admin = _is_scheduler_admin(user)
+    del_query = db.query(Appointment).filter(
+        Appointment.id == appointment_id,
+        Appointment.organization_id == org_id,
+        Appointment.deleted_at.is_(None),
+    )
+    if not is_admin:
+        del_query = del_query.filter(
+            or_(
+                Appointment.assigned_user_id == user.id,
+                Appointment.created_by_user_id == user.id,
+            )
+        )
+    appointment = del_query.first()
+
+    if not appointment:
+        scheduler_error(404, NOT_FOUND, "Appointment not found")
+
+    appointment.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+
+    _audit_log(
+        db, org_id, user.id, "appointment_deleted",
+        entity_type="appointment", entity_id=appointment_id,
+        extra={"title": appointment.title},
+    )
+
+    return {"message": "Appointment deleted", "appointment_id": appointment_id}
+
+
+# ============================================================================
+# RESTORE APPOINTMENT (undo soft-delete)
+# ============================================================================
+
+@router.post("/appointments/{appointment_id}/restore")
+async def restore_appointment(
+    appointment_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    _scope=Depends(require_scope("write:appointments")),
+):
+    """Restore a soft-deleted appointment.
+
+    Clears the deleted_at timestamp so the appointment reappears in all
+    list/get queries. Admins only.
+    """
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+
+    if not _is_scheduler_admin(user):
+        scheduler_error(403, FORBIDDEN, "Only admins can restore deleted appointments")
+
+    _models = get_models()
+    Appointment = _models['Appointment']
+
+    appointment = db.query(Appointment).filter(
+        Appointment.id == appointment_id,
+        Appointment.organization_id == org_id,
+        Appointment.deleted_at.isnot(None),
+    ).first()
+
+    if not appointment:
+        scheduler_error(404, NOT_FOUND, "Deleted appointment not found")
+
+    appointment.deleted_at = None
+    db.commit()
+
+    _audit_log(
+        db, org_id, user.id, "appointment_restored",
+        entity_type="appointment", entity_id=appointment_id,
+        extra={"title": appointment.title},
+    )
+
+    return {"message": "Appointment restored", "appointment_id": appointment_id}

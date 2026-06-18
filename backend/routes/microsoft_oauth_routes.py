@@ -1075,21 +1075,35 @@ async def sync_calendar(request: Request):
         if not access_token:
             raise HTTPException(status_code=401, detail="Invalid access token. Please reconnect Microsoft 365.")
 
-        # Check expiration and refresh if needed
-        if oauth_record.token_expires_at and oauth_record.token_expires_at < datetime.now(timezone.utc):
-            refresh_token = main.decrypt_token(oauth_record.refresh_token) if oauth_record.refresh_token else None
-            if refresh_token:
-                token_data = microsoft_outlook_client.refresh_access_token(refresh_token)
-                if token_data:
-                    access_token = token_data["access_token"]
-                    oauth_record.access_token = main.encrypt_token(token_data["access_token"])
-                    oauth_record.refresh_token = main.encrypt_token(token_data["refresh_token"])
-                    oauth_record.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token_data.get("expires_in", 3600))
-                    db.commit()
+        # Proactive refresh: if token is expiring within 5 minutes, refresh now
+        # (uses async httpx — does not block the event loop)
+        if oauth_record.token_expires_at:
+            token_expiry = oauth_record.token_expires_at
+            if token_expiry.tzinfo is None:
+                token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+            refresh_threshold = datetime.now(timezone.utc) + timedelta(minutes=5)
+            if token_expiry <= refresh_threshold:
+                refresh_token = main.decrypt_token(oauth_record.refresh_token) if oauth_record.refresh_token else None
+                if refresh_token:
+                    token_data = await microsoft_outlook_client.refresh_access_token_async(refresh_token)
+                    if token_data:
+                        access_token = token_data["access_token"]
+                        oauth_record.access_token = main.encrypt_token(token_data["access_token"])
+                        if token_data.get("refresh_token"):
+                            oauth_record.refresh_token = main.encrypt_token(token_data["refresh_token"])
+                        oauth_record.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token_data.get("expires_in", 3600))
+                        db.commit()
+                        logger.info("Proactively refreshed Outlook token for user %s", current_user.id)
+                    else:
+                        raise HTTPException(
+                            status_code=401,
+                            detail="Outlook token has expired and could not be refreshed. Please reconnect Microsoft 365 in Settings.",
+                        )
                 else:
-                    raise HTTPException(status_code=401, detail="Token expired and refresh failed. Please reconnect.")
-            else:
-                raise HTTPException(status_code=401, detail="Token expired. Please reconnect Microsoft 365.")
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Outlook token expired. Please reconnect Microsoft 365 in Settings.",
+                    )
 
         start_time = datetime.now(timezone.utc)
         end_time = start_time + timedelta(days=30)

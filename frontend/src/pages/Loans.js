@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { loansAPI, salesforceAPI } from '../services/api';
-import { useLoans } from '../hooks/useQueries';
+import { useLoans, LIST_PAGE_SIZE } from '../hooks/useQueries';
 import CalendarSidebar from '../components/CalendarSidebar';
 import PermissionGate from '../components/PermissionGate';
 import { usePermissions } from '../contexts/PermissionContext';
@@ -99,6 +99,20 @@ function Loans() {
   const { data: loansData, isLoading: loading, error: queryError, refetch: refetchLoans } = useLoans();
   const loans = useMemo(() => Array.isArray(loansData) ? loansData : [], [loansData]);
   const error = queryError?.message || null;
+
+  // The list endpoint is capped at LIST_PAGE_SIZE and this page filters/searches
+  // client-side over the full array. If we hit the cap, records likely exist
+  // beyond it that the user can't see/search — warn once instead of silently
+  // hiding them. (Full server-side pagination is a separate UX task.)
+  const truncationWarnedRef = React.useRef(false);
+  useEffect(() => {
+    if (Array.isArray(loansData) && loansData.length >= LIST_PAGE_SIZE && !truncationWarnedRef.current) {
+      truncationWarnedRef.current = true;
+      toast.info(
+        `Showing the first ${LIST_PAGE_SIZE} loans. Use search or a stage filter to find records beyond this limit.`
+      );
+    }
+  }, [loansData]);
 
   const [showModal, setShowModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState(initialFilter);

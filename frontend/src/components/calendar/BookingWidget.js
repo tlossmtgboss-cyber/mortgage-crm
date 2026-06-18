@@ -537,14 +537,20 @@ export default function BookingWidget({
 
           {/* Footer */}
           <div style={styles.footer}>
-            <a
-              href="https://perenniaai.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={styles.footerLink}
-            >
-              Powered by <strong>Perennia AI</strong>
-            </a>
+            {config?.booking_page?.powered_by_text ? (
+              <span style={styles.footerLink}>
+                {config.booking_page.powered_by_text}
+              </span>
+            ) : (
+              <a
+                href="https://perenniaai.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={styles.footerLink}
+              >
+                Powered by <strong>Perennia AI</strong>
+              </a>
+            )}
           </div>
         </>
       )}

@@ -79,7 +79,7 @@ class OutlookCalendarProvider(CalendarProvider):
         start_ms = time.monotonic()
         try:
             client = _get_outlook_client()
-            access_token = self._ensure_valid_token(credentials)
+            access_token = await self._ensure_valid_token(credentials)
             if not access_token:
                 return ProviderSyncResult(
                     provider=self.provider_name,
@@ -139,7 +139,7 @@ class OutlookCalendarProvider(CalendarProvider):
         start_ms = time.monotonic()
         try:
             client = _get_outlook_client()
-            access_token = self._ensure_valid_token(credentials)
+            access_token = await self._ensure_valid_token(credentials)
             if not access_token:
                 return ProviderSyncResult(
                     provider=self.provider_name,
@@ -205,7 +205,7 @@ class OutlookCalendarProvider(CalendarProvider):
         start_ms = time.monotonic()
         try:
             client = _get_outlook_client()
-            access_token = self._ensure_valid_token(credentials)
+            access_token = await self._ensure_valid_token(credentials)
             if not access_token:
                 return ProviderSyncResult(
                     provider=self.provider_name,
@@ -244,7 +244,7 @@ class OutlookCalendarProvider(CalendarProvider):
     ) -> List[BusyBlock]:
         try:
             client = _get_outlook_client()
-            access_token = self._ensure_valid_token(credentials)
+            access_token = await self._ensure_valid_token(credentials)
             if not access_token:
                 logger.warning("OutlookCalendarProvider: no valid token for busy times")
                 return []
@@ -290,7 +290,7 @@ class OutlookCalendarProvider(CalendarProvider):
     ) -> bool:
         try:
             client = _get_outlook_client()
-            access_token = self._ensure_valid_token(credentials)
+            access_token = await self._ensure_valid_token(credentials)
             if not access_token:
                 return False
 
@@ -305,8 +305,16 @@ class OutlookCalendarProvider(CalendarProvider):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _ensure_valid_token(self, credentials: Dict[str, Any]) -> Optional[str]:
-        """Return a valid access token, refreshing synchronously if expired."""
+    async def _ensure_valid_token(self, credentials: Dict[str, Any]) -> Optional[str]:
+        """Return a valid access token, refreshing proactively if expiring within 5 minutes.
+
+        Fully async — uses httpx via refresh_access_token_async and does NOT block
+        the event loop. Refreshes proactively (5-minute buffer) rather than waiting
+        for a 401 from the Graph API.
+
+        Returns None if no token is available or refresh fails.
+        Callers should treat None as "Outlook not connected / token revoked".
+        """
         access_token = credentials.get("access_token")
         refresh_token = credentials.get("refresh_token")
         expires_at_str = credentials.get("expires_at")
@@ -314,7 +322,9 @@ class OutlookCalendarProvider(CalendarProvider):
         if not access_token:
             return None
 
-        # Check expiration if available
+        # Proactive refresh: if expires_at is known and the token is expiring
+        # within the next 5 minutes (or already expired), refresh now rather
+        # than waiting for a 401 from Graph.
         if expires_at_str and refresh_token:
             try:
                 if isinstance(expires_at_str, str):
@@ -322,14 +332,44 @@ class OutlookCalendarProvider(CalendarProvider):
                 else:
                     expires_at = expires_at_str
 
-                if isinstance(expires_at, datetime) and expires_at <= datetime.now(timezone.utc):
+                if not isinstance(expires_at, datetime):
+                    raise ValueError("expires_at is not a datetime")
+
+                # Ensure timezone-aware comparison
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+                refresh_threshold = datetime.now(timezone.utc) + timedelta(minutes=5)
+                if expires_at <= refresh_threshold:
                     client = _get_outlook_client()
-                    refreshed = client.refresh_access_token(refresh_token)
+                    refreshed = await client.refresh_access_token_async(refresh_token)
                     if refreshed and refreshed.get("access_token"):
+                        logger.info(
+                            "OutlookCalendarProvider: proactively refreshed token "
+                            "(was expiring %s)",
+                            expires_at.isoformat(),
+                        )
+                        # Update the credentials dict in-place so callers that
+                        # hold a reference to it can persist the new values.
+                        credentials["access_token"] = refreshed["access_token"]
+                        if refreshed.get("refresh_token"):
+                            credentials["refresh_token"] = refreshed["refresh_token"]
+                        if refreshed.get("expires_at"):
+                            credentials["expires_at"] = refreshed["expires_at"]
                         return refreshed["access_token"]
+
+                    logger.warning(
+                        "OutlookCalendarProvider: token refresh failed — "
+                        "user may need to reconnect Outlook"
+                    )
                     return None
-            except (ValueError, TypeError):
-                pass  # Can't parse expiry; use existing token
+
+            except (ValueError, TypeError) as exc:
+                logger.debug(
+                    "OutlookCalendarProvider: could not parse expires_at (%s), "
+                    "using existing token",
+                    exc,
+                )
 
         return access_token
 

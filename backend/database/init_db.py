@@ -2314,6 +2314,33 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ Agent memory unique indexes migration note: {e}")
 
+        # Partial index on scheduler_appointments for active (non-terminal) rows.
+        try:
+            import importlib
+            _active_idx_mod = importlib.import_module("migrations.add_appointment_active_partial_index")
+            _active_idx_mod.run_migration(_engine)
+            logger.info("✅ Appointment active partial index ready")
+        except Exception as e:
+            logger.warning(f"⚠️ Appointment active partial index migration note: {e}")
+
+        # scheduler_audit_log: immutability trigger + SHA-256 hash chain
+        try:
+            import importlib
+            _sai_mod = importlib.import_module("migrations.add_scheduler_audit_immutability")
+            _sai_mod.run_migration(_engine)
+            logger.info("✅ scheduler_audit_log immutability + hash-chain ready")
+        except Exception as e:
+            logger.warning(f"⚠️ scheduler_audit_log immutability migration note: {e}")
+
+        # Enable PostgreSQL RLS on all scheduler tables (FORCE ROW LEVEL SECURITY for owner bypass)
+        try:
+            import importlib
+            _sched_rls_mod = importlib.import_module("migrations.enable_scheduler_rls")
+            _sched_rls_mod.run_migration(_engine)
+            logger.info("✅ Scheduler RLS policies enabled")
+        except Exception as e:
+            logger.warning(f"⚠️ Scheduler RLS migration note: {e}")
+
         # Voicemail tables: add organization_id for multi-tenant isolation
         try:
             with _engine.connect() as conn:

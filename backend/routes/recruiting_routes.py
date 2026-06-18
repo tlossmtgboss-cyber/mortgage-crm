@@ -8,13 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from datetime import datetime, date
 from database import get_db
 from services.recruiting_service import RecruitingService
 from auth.dependencies import get_current_user
 from database.models import User
 from sqlalchemy.exc import SQLAlchemyError
+import json
 import logging
 import os
 
@@ -266,7 +267,7 @@ async def get_partner_recruit_stats(
 class CandidateCreate(BaseModel):
     first_name: str
     last_name: str
-    email: str
+    email: EmailStr
     phone: Optional[str] = None
     source: Optional[str] = "direct"
     referrer_user_id: Optional[int] = None
@@ -426,7 +427,14 @@ async def list_candidates(
         limit=limit,
         offset=offset
     )
-    return {"candidates": candidates, "count": len(candidates)}
+    total = await service.count_candidates(
+        organization_id=current_user.organization_id,
+        status=status,
+        role_id=role_id,
+        source=source,
+        search=search,
+    )
+    return {"candidates": candidates, "count": len(candidates), "total": total, "offset": offset}
 
 
 @router.get("/candidates/{candidate_id}")
@@ -539,6 +547,9 @@ async def update_candidate_status(
             status_code=400,
             detail="disposition_code is required when rejecting or withdrawing a candidate"
         )
+
+    if data.skip_score_gate and current_user.role not in ("admin", "platform_admin", "site_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can override score gates")
 
     service = RecruitingService(db)
     try:
@@ -851,6 +862,28 @@ async def submit_feedback(
     db: Session = Depends(get_db),
 ):
     """Submit feedback for an interview."""
+    interview_row = db.execute(text("""
+        SELECT interviewer_user_ids, primary_interviewer_id
+        FROM mm_interviews
+        WHERE id = :id AND organization_id = :org_id
+    """), {"id": interview_id, "org_id": current_user.organization_id}).fetchone()
+
+    if not interview_row:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    interviewer_ids = interview_row.interviewer_user_ids
+    if isinstance(interviewer_ids, str):
+        interviewer_ids = json.loads(interviewer_ids)
+    interviewer_ids = interviewer_ids or []
+
+    is_admin = current_user.role in ("admin", "platform_admin", "site_admin")
+    is_interviewer = (
+        current_user.id in interviewer_ids
+        or current_user.id == interview_row.primary_interviewer_id
+    )
+    if not (is_admin or is_interviewer):
+        raise HTTPException(status_code=403, detail="Only assigned interviewers can submit feedback")
+
     service = RecruitingService(db)
     try:
         result = await service.submit_interview_feedback(
@@ -1277,7 +1310,13 @@ async def list_candidate_notes(
     """List notes for a candidate."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
-    query = text("""
+    is_admin = current_user.role in ("admin", "platform_admin", "site_admin")
+    if include_private and is_admin:
+        privacy_clause = "1=1"
+    else:
+        privacy_clause = "n.is_private IS NOT TRUE OR n.created_by = :user_id"
+
+    query = text(f"""
         SELECT
             n.id, n.note_type, n.content, n.is_private, n.created_at,
             u.full_name as author_name
@@ -1285,7 +1324,7 @@ async def list_candidate_notes(
         JOIN users u ON u.id = n.created_by
         WHERE n.candidate_id = :candidate_id
         AND n.organization_id = :org_id
-        AND (n.is_private = false OR n.created_by = :user_id)
+        AND ({privacy_clause})
         ORDER BY n.created_at DESC
     """)
 
@@ -1693,7 +1732,7 @@ async def get_candidate_full_profile(
             "slug": portal_workspace.slug if portal_workspace else None,
             "is_active": portal_workspace.is_active if portal_workspace else False,
             "has_portal": portal_workspace is not None,
-        } if True else None,
+        },
     }
 
 

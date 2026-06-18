@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 from dataclasses import dataclass
 import logging
 import json
-from sqlalchemy.exc import SQLAlchemyError
+import re
+import secrets
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +22,13 @@ VALID_TRANSITIONS = {
     "new": {"screening", "phone_screen", "rejected", "withdrawn"},
     "screening": {"phone_screen", "rejected", "withdrawn"},
     "phone_screen": {"interview", "rejected", "withdrawn"},
-    "interview": {"assessment", "offer", "rejected", "withdrawn"},
-    "assessment": {"offer", "rejected", "withdrawn"},
-    "offer": {"hired", "rejected", "withdrawn"},
+    "interview": {"assessment", "offer", "rejected", "withdrawn", "not_selected"},
+    "assessment": {"offer", "rejected", "withdrawn", "not_selected"},
+    "offer": {"hired", "rejected", "withdrawn", "not_selected"},
     "hired": set(),  # Terminal state
     "rejected": {"new"},  # Allow re-opening
     "withdrawn": {"new"},  # Allow re-opening
+    "not_selected": {"new"},  # Allow re-opening
 }
 
 # Score gates: minimum assessment score and required quizzes to advance to each stage
@@ -271,6 +274,35 @@ class RecruitingService:
             }
             for r in results
         ]
+
+    async def count_candidates(
+        self,
+        organization_id: int,
+        status: Optional[str] = None,
+        role_id: Optional[int] = None,
+        source: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> int:
+        """Count candidates matching the given filters (for pagination)."""
+        result = self.db.execute(text("""
+            SELECT COUNT(*) FROM mm_candidates c
+            WHERE c.is_active = true
+            AND c.organization_id = :org_id
+            AND (:status IS NULL OR c.status = :status)
+            AND (:role_id IS NULL OR c.target_role_id = :role_id)
+            AND (:source IS NULL OR c.source = :source)
+            AND (:search IS NULL OR
+                 c.first_name ILIKE '%' || :search || '%' OR
+                 c.last_name ILIKE '%' || :search || '%' OR
+                 c.email ILIKE '%' || :search || '%')
+        """), {
+            "org_id": organization_id,
+            "status": status,
+            "role_id": role_id,
+            "source": source,
+            "search": search,
+        }).scalar()
+        return result or 0
 
     async def get_candidate_detail(
         self,
@@ -1103,13 +1135,21 @@ class RecruitingService:
                     responded_at = CURRENT_TIMESTAMP,
                     response_notes = :notes,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id AND status IN ('sent', 'viewed', 'negotiating') {resp_org_filter}
+                WHERE id = :id AND status IN ('sent', 'viewed', 'negotiating')
+                AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+                {resp_org_filter}
                 RETURNING candidate_id, offer_number
             """
             result = self.db.execute(text(query), resp_params_base).fetchone()
 
             if not result:
-                raise ValueError(f"Offer {offer_id} not found or already responded to")
+                # Check if it exists but is expired
+                expired = self.db.execute(text("""
+                    SELECT id FROM mm_offers WHERE id = :id AND organization_id = :org_id
+                """), {"id": offer_id, "org_id": organization_id}).fetchone()
+                if expired:
+                    raise ValueError(f"Offer {offer_id} has expired or already been responded to")
+                raise ValueError(f"Offer {offer_id} not found")
 
             # Update candidate to hired (scoped via offer's candidate_id)
             hired_params = {"id": result.candidate_id, "org_id": organization_id}
@@ -1334,37 +1374,31 @@ class RecruitingService:
         last_name: str
     ) -> Dict[str, Any]:
         """Auto-create recruit portal workspace for a candidate."""
-        import re
-        import secrets
-
         try:
             # Generate slug from name with cryptographic random suffix
             base_slug = f"{first_name.lower()}-{last_name.lower()}" if first_name and last_name else f"candidate-{candidate_id}"
             base_slug = re.sub(r'[^a-z0-9-]', '', base_slug)
             slug = f"{base_slug}-{secrets.token_hex(8)}"
 
-            # Check for uniqueness (extremely unlikely collision)
-            attempts = 0
-            while attempts < 10:
-                result = self.db.execute(
-                    text("SELECT id FROM recruit_portal_workspaces WHERE slug = :slug"),
-                    {"slug": slug}
-                )
-                if not result.fetchone():
+            # Insert with unique constraint — retry on collision instead of TOCTOU check
+            workspace_id = None
+            for _ in range(10):
+                try:
+                    result = self.db.execute(
+                        text("""
+                            INSERT INTO recruit_portal_workspaces (candidate_id, slug, is_active, created_at)
+                            VALUES (:candidate_id, :slug, true, NOW())
+                            RETURNING id
+                        """),
+                        {"candidate_id": candidate_id, "slug": slug}
+                    )
+                    workspace_id = result.fetchone().id
                     break
-                slug = f"{base_slug}-{secrets.token_hex(8)}"
-                attempts += 1
-
-            # Create workspace
-            result = self.db.execute(
-                text("""
-                    INSERT INTO recruit_portal_workspaces (candidate_id, slug, is_active, created_at)
-                    VALUES (:candidate_id, :slug, true, NOW())
-                    RETURNING id
-                """),
-                {"candidate_id": candidate_id, "slug": slug}
-            )
-            workspace_id = result.fetchone().id
+                except IntegrityError:
+                    self.db.rollback()
+                    slug = f"{base_slug}-{secrets.token_hex(8)}"
+            else:
+                raise RuntimeError("Could not generate unique portal slug after 10 attempts")
 
             # Generate access token
             token = f"recruit_{secrets.token_hex(32)}"
@@ -1385,6 +1419,8 @@ class RecruitingService:
                 "portal_url": f"/join/{slug}"
             }
 
+        except RuntimeError:
+            raise
         except Exception as e:
             logger.error(f"Failed to create portal workspace for candidate {candidate_id}: {e}")
             return {}

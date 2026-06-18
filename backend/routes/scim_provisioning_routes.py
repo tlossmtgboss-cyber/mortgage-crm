@@ -938,6 +938,22 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         new_user = result.fetchone()
         db.commit()
 
+        # Auto-provision SchedulerConfig for the new SCIM user so they can
+        # use the calendar immediately without a manual seed step.
+        try:
+            from services.scheduler_provisioning import auto_provision_scheduler_config
+            await auto_provision_scheduler_config(
+                user_id=new_user.id,
+                organization_id=org_id,
+                db=db,
+                user_email=user_name,
+            )
+        except Exception as _sched_exc:
+            logger.warning(
+                "scim_create_user: scheduler auto-provision failed for user_id=%s — %s",
+                new_user.id if new_user else "unknown", _sched_exc,
+            )
+
         # Audit: SCIM user creation
         _write_audit_log(
             db=db,
@@ -2086,6 +2102,26 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             created_ids.append(new_id[0] if new_id else None)
 
         db.commit()
+
+        # Auto-provision SchedulerConfig for each newly created user so they
+        # can use the calendar immediately (called after commit so user IDs exist).
+        if org_id and created_ids:
+            try:
+                from services.scheduler_provisioning import auto_provision_scheduler_config
+                valid_idx = 0
+                for uid in created_ids:
+                    if uid is not None and valid_idx < len(valid_rows):
+                        await auto_provision_scheduler_config(
+                            user_id=uid,
+                            organization_id=org_id,
+                            db=db,
+                            user_email=valid_rows[valid_idx]["email"],
+                        )
+                    valid_idx += 1
+            except Exception as _sched_exc:
+                logger.warning(
+                    "import_users_csv: scheduler auto-provision failed — %s", _sched_exc,
+                )
 
         # Update results with created IDs
         created_idx = 0

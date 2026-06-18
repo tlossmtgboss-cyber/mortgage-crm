@@ -40,17 +40,30 @@ def get_test_session(engine=None):
 
 
 def _register_factory_models(Base):
-    """Register models defined in factory functions so create_all() can resolve FKs."""
-    try:
-        from workflow_config_models import create_workflow_config_models
-        create_workflow_config_models(Base)
-    except Exception as e:
-        logger.debug(f"Workflow config models registration skipped: {e}")
-    try:
-        from models.workflow_sla import create_workflow_sla_models
-        create_workflow_sla_models(Base)
-    except Exception as e:
-        logger.debug(f"Workflow SLA models registration skipped: {e}")
+    """Register ALL models (direct + factory) on the canonical Base via the single
+    entry point, mirroring what the running app does, so every cross-model
+    relationship resolves. register_all_models is idempotent."""
+    from model_registry import register_all_models
+    register_all_models(Base)
+
+
+def _dedupe_metadata_indexes(Base):
+    """Remove duplicate-named indexes within each table.
+
+    Some models declare a column with ``index=True`` AND an explicit
+    ``Index("ix_<table>_<col>", ...)`` of the same auto-generated name, producing
+    two Index objects with identical names. ``metadata.create_all()`` then emits
+    ``CREATE INDEX`` twice -> "already exists" and aborts the whole create. Prod
+    is unaffected (it never runs create_all), but the test harness must be robust
+    to this latent model bug. Keep the first index of each name per table.
+    """
+    for table in Base.metadata.tables.values():
+        seen = {}
+        for idx in list(table.indexes):
+            if idx.name in seen:
+                table.indexes.discard(idx)
+            else:
+                seen[idx.name] = idx
 
 
 def create_all_tables(Base, engine):
@@ -62,6 +75,7 @@ def create_all_tables(Base, engine):
     4. Falls back to multi-pass per-table creation if create_all() fails
     """
     _register_factory_models(Base)
+    _dedupe_metadata_indexes(Base)
 
     # Clean slate — drop entire schema to avoid stale constraints/indexes
     with engine.connect() as conn:

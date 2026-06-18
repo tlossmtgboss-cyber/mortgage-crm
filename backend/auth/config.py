@@ -96,13 +96,14 @@ class AuthSettings(BaseModel):
 
     @field_validator("algorithm", mode="after")
     @classmethod
-    def warn_hs256_in_production(cls, v):
-        """Log a warning if HS256 is used in production (RS256 is recommended)."""
+    def require_rs256_in_production(cls, v):
+        """Refuse to start with HS256 in production (RS256 is mandatory there)."""
         environment = os.getenv("ENVIRONMENT", "development")
         is_prod = environment.lower() in ("production", "prod") or os.getenv("RAILWAY_ENVIRONMENT")
-        if v == "HS256" and is_prod:
-            logger.warning(
-                "SECURITY: HS256 in production — RS256 is recommended. "
+        if v != "RS256" and is_prod:
+            raise ValueError(
+                "SECURITY: RS256 is required in production. "
+                f"AUTH_ALGORITHM={v!r} is not permitted. "
                 "Set AUTH_ALGORITHM=RS256 and configure AUTH_PRIVATE_KEY / AUTH_PUBLIC_KEY."
             )
         return v

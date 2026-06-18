@@ -171,6 +171,10 @@ class DocType(str, enum.Enum):
 # MODEL FACTORY
 # =============================================================================
 
+from model_cache import base_memoize
+
+
+@base_memoize
 def create_perennia_docs_models(Base):
     """
     Factory function to create Perennia Docs AI models with the provided SQLAlchemy Base.

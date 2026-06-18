@@ -19,6 +19,7 @@ vi.mock('../../hooks/useQueries', () => ({
     isLoading: false,
     refetch: mockRefetch,
   })),
+  LIST_PAGE_SIZE: 500,
 }));
 
 import { useLeads } from '../../hooks/useQueries';

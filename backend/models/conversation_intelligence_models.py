@@ -30,9 +30,8 @@ from typing import Optional, List, Dict, Any
 # Try to import Base from the project
 try:
     from database import Base
-except ImportError:
-    from sqlalchemy.orm import declarative_base
-    Base = declarative_base()
+except Exception as e:  # fail loud — a second Base silently splits the registry
+    raise ImportError(f"{__name__} requires the canonical Base from `database`") from e
 
 
 # =============================================================================

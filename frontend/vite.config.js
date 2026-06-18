@@ -40,6 +40,16 @@ export default defineConfig(({ mode }) => {
             vendor: ['react', 'react-dom', 'react-router-dom'],
             mui: ['@mui/material', '@mui/icons-material'],
             charts: ['recharts'],
+            // Heavy feature deps split into their own chunks so they only load
+            // on the routes that use them (and stay cached across deploys).
+            // Only libs that are real dependencies (see package.json) are listed.
+            livekit: ['@livekit/components-react', '@livekit/components-styles', 'livekit-client'],
+            chime: ['amazon-chime-sdk-component-library-react', 'amazon-chime-sdk-js'],
+            editor: ['react-quill'],
+            markdown: ['react-markdown', 'remark-gfm'],
+            dnd: ['react-beautiful-dnd'],
+            stripe: ['@stripe/react-stripe-js', '@stripe/stripe-js'],
+            'file-utils': ['jszip', 'html2canvas', 'dompurify'],
           },
         },
       },

@@ -11,7 +11,7 @@ Handles partial failures gracefully - if one source fails, others still return.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 
 from sqlalchemy.orm import Session
@@ -287,7 +287,9 @@ class UnifiedCalendarService:
                 expires_at = token_row.expires_at
                 if expires_at.tzinfo is None:
                     expires_at = expires_at.replace(tzinfo=timezone.utc)
-                if expires_at <= datetime.now(timezone.utc):
+                # Proactive refresh: refresh when token is within 5 minutes of expiry
+                refresh_threshold = datetime.now(timezone.utc) + timedelta(minutes=5)
+                if expires_at <= refresh_threshold:
                     refreshed = microsoft_outlook_client.refresh_access_token(token_row.refresh_token)
                     if refreshed and refreshed.get("access_token"):
                         access_token = refreshed["access_token"]
@@ -299,8 +301,15 @@ class UnifiedCalendarService:
                                 refreshed["expires_at"].replace("Z", "+00:00")
                             )
                         self.db.commit()
+                        logger.info(
+                            "UnifiedCalendarService: proactively refreshed Outlook token for user %s",
+                            self.user_id,
+                        )
                     else:
-                        logger.warning("Outlook token refresh failed for user %s", self.user_id)
+                        logger.warning(
+                            "Outlook token refresh failed for user %s — token may be revoked",
+                            self.user_id,
+                        )
                         return [], None
 
             result = microsoft_outlook_client.list_events(

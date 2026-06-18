@@ -585,7 +585,15 @@ def _setup_mutation_audit():
                 _write_audit_batch(audit_entries)
 
         except Exception as e:
-            logger.warning(f"Mutation audit after_flush failed (non-fatal): {e}")
+            # In production/staging, audit logging is a compliance requirement —
+            # a silent failure means mutations go unrecorded. Escalate so the
+            # commit fails loudly rather than losing the audit trail. In dev,
+            # keep the warning-only behavior so local work isn't disrupted.
+            env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
+            if env in ("production", "staging"):
+                logger.error(f"CRITICAL: Mutation audit after_flush failed: {e}")
+                raise
+            logger.warning(f"Mutation audit after_flush failed (non-fatal, dev mode): {e}")
 
 
 def _safe_state(obj) -> dict:

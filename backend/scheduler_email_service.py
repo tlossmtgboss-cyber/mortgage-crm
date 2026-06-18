@@ -392,6 +392,8 @@ def send_appointment_confirmation_email(
     duration_minutes: int = 30,
     reschedule_url: str = None,
     organization_id: int = None,
+    org_name: str = None,
+    org_address: str = None,
 ):
     """Send appointment confirmation email with calendar invite using SendGrid"""
     if _is_email_suppressed(attendee_email):
@@ -450,11 +452,12 @@ def send_appointment_confirmation_email(
                         </p>
         """
 
-        html_content = _build_scheduler_email_html(
+        html_content = build_scheduler_email_html(
             header_color=_HEADER_COLOR_TEAL,
             heading="Appointment Confirmed!",
             body_content=body_content,
-            footer_text="Sent from The Tim Loss Team",
+            org_name=org_name,
+            org_address=org_address,
         )
 
         video_link_text = f"\nJoin Video Call: {video_link}" if video_link else ""

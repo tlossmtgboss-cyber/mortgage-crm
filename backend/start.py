@@ -172,6 +172,7 @@ def main():
 
     got_lock = False
     lock_conn = None
+    migration_failed = False
     try:
         if database_url and "sqlite" not in database_url:
             import psycopg2
@@ -194,11 +195,18 @@ def main():
                     timeout=120
                 )
                 if result.returncode != 0:
-                    print(f"START.PY: Migration exited with code {result.returncode} — continuing startup", flush=True)
+                    # A non-zero migration exit is a real failure — block startup so
+                    # we never serve traffic against a half-migrated schema.
+                    print(f"START.PY: Migration FAILED with code {result.returncode} — aborting startup", flush=True)
+                    migration_failed = True
             except subprocess.TimeoutExpired:
-                print("START.PY: Migrations timed out after 120s — continuing startup", flush=True)
+                print("START.PY: Migrations timed out after 120s — aborting startup", flush=True)
+                migration_failed = True
+        # NOTE: not acquiring the advisory lock (got_lock is False) is a benign
+        # skip — another replica is running migrations — and must NOT abort.
     except Exception as e:
-        print(f"START.PY: Migration step failed ({e}) — continuing startup without migrations", flush=True)
+        print(f"START.PY: Migration step failed ({e}) — aborting startup", flush=True)
+        migration_failed = True
     finally:
         if lock_conn:
             if got_lock:
@@ -212,6 +220,9 @@ def main():
                 lock_conn.close()
             except Exception:
                 pass
+
+    if migration_failed:
+        sys.exit(1)
 
     # Verify schema is at Alembic head revision
     print("=" * 50, flush=True)

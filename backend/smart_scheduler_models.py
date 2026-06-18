@@ -50,6 +50,10 @@ from database.models.scheduler import (
 # FACTORY FUNCTION (backward-compatible wrapper)
 # ============================================================================
 
+from model_cache import base_memoize
+
+
+@base_memoize
 def create_smart_scheduler_models(Base=None):
     """
     Return the scheduler model classes as a dict.

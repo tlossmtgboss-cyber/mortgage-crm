@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { leadsAPI, loansAPI } from '../services/api';
-import { useLeads } from '../hooks/useQueries';
+import { useLeads, LIST_PAGE_SIZE } from '../hooks/useQueries';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import DispositionNoteModal from '../components/DispositionNoteModal';
@@ -25,6 +25,20 @@ function Leads() {
   // Use React Query for cached data fetching - instant on revisit!
   const { data: leadsData, isLoading: loading, refetch: refetchLeads } = useLeads();
   const leads = leadsData || [];
+
+  // The list endpoint is capped at LIST_PAGE_SIZE and this page filters/searches
+  // client-side over the full array. If we hit the cap, records likely exist
+  // beyond it that the user can't see/search — warn once instead of silently
+  // hiding them. (Full server-side pagination is a separate UX task.)
+  const truncationWarnedRef = React.useRef(false);
+  useEffect(() => {
+    if (Array.isArray(leadsData) && leadsData.length >= LIST_PAGE_SIZE && !truncationWarnedRef.current) {
+      truncationWarnedRef.current = true;
+      toast.info(
+        `Showing the first ${LIST_PAGE_SIZE} leads. Use search or a stage filter to find records beyond this limit.`
+      );
+    }
+  }, [leadsData]);
 
   const [showModal, setShowModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);

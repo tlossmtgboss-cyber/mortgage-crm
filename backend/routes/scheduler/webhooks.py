@@ -25,6 +25,7 @@ from routes.scheduler._helpers import (
     get_current_user, _get_org_id, _is_scheduler_admin, _audit_log,
 )
 from routes.scheduler.constants import DEFAULT_TIMEZONE
+from auth.scope_enforcement import require_scope
 from db import get_db
 from database.models.webhook import WebhookSubscription, WebhookDeliveryLog
 from services.scheduler_webhook_service import (
@@ -163,6 +164,7 @@ async def create_webhook(
     body: WebhookRegisterRequest,
     request: Request,
     db: Session = Depends(get_db),
+    _scope=Depends(require_scope("webhooks:manage")),
 ):
     """Register a new webhook endpoint for appointment lifecycle events.
 
@@ -246,6 +248,7 @@ async def list_webhooks(
     request: Request,
     include_inactive: bool = Query(False, description="Include deactivated webhooks"),
     db: Session = Depends(get_db),
+    _scope=Depends(require_scope("webhooks:manage")),
 ):
     """List all webhook subscriptions for the authenticated user's organization."""
     user = await get_current_user(request, db)
@@ -278,6 +281,7 @@ async def delete_webhook(
     webhook_id: int,
     request: Request,
     db: Session = Depends(get_db),
+    _scope=Depends(require_scope("webhooks:manage")),
 ):
     """Deactivate a webhook subscription.
 
@@ -325,6 +329,7 @@ async def test_webhook(
     webhook_id: int,
     request: Request,
     db: Session = Depends(get_db),
+    _scope=Depends(require_scope("webhooks:manage")),
 ):
     """Send a test event to verify the webhook endpoint is reachable.
 
@@ -416,6 +421,7 @@ async def list_deliveries(
     status_filter: Optional[str] = Query(None, description="Filter by status: success, failed, pending"),
     event_filter: Optional[str] = Query(None, description="Filter by event type"),
     db: Session = Depends(get_db),
+    _scope=Depends(require_scope("webhooks:manage")),
 ):
     """Get recent delivery log entries for a webhook subscription.
 

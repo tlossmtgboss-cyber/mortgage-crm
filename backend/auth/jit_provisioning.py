@@ -8,6 +8,7 @@ Maps IdP groups/claims to CRM roles.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 from datetime import datetime, timezone
@@ -130,6 +131,34 @@ def provision_user_from_sso(
         f"role={legacy_role}, permission_role={permission_role}, "
         f"provider={sso_provider}"
     )
+
+    # Auto-provision SchedulerConfig so the new user can use the calendar
+    # immediately without hitting the seed-defaults endpoint manually.
+    try:
+        from services.scheduler_provisioning import auto_provision_scheduler_config
+        asyncio.run(auto_provision_scheduler_config(
+            user_id=user.id,
+            organization_id=organization_id,
+            db=db,
+            user_email=email,
+        ))
+    except RuntimeError:
+        # asyncio.run() raises RuntimeError when called inside an already-running
+        # event loop (e.g. during tests with pytest-asyncio).  Fall back to
+        # creating a new task on the running loop.
+        try:
+            from services.scheduler_provisioning import auto_provision_scheduler_config
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(auto_provision_scheduler_config(
+                user_id=user.id,
+                organization_id=organization_id,
+                db=db,
+                user_email=email,
+            ))
+        except Exception as _exc:
+            logger.warning("JIT provisioning: scheduler auto-provision failed — %s", _exc)
+    except Exception as _exc:
+        logger.warning("JIT provisioning: scheduler auto-provision failed — %s", _exc)
 
     return user
 

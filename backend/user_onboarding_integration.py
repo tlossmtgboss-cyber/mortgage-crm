@@ -23,11 +23,22 @@ import hmac
 logger = logging.getLogger(__name__)
 
 
+_user_onboarding_models_cache = {}
+
+
 def create_user_onboarding_models(Base):
     """
     Create all user onboarding models using the provided Base class
-    Returns a dictionary of model classes
+    Returns a dictionary of model classes.
+
+    Idempotent per Base: repeated calls with the same Base return the cached
+    classes instead of re-defining (and re-mapping) them, which would corrupt
+    the registry. Required so models/user_onboarding.py can re-export these and
+    register_all_models() can also call it.
     """
+    base_id = id(Base)
+    if base_id in _user_onboarding_models_cache:
+        return _user_onboarding_models_cache[base_id]
 
     class OnboardingRole(Base):
         """User roles for the onboarding system"""
@@ -212,7 +223,7 @@ def create_user_onboarding_models(Base):
         ip_address = Column(String(45))
         created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
-    return {
+    _models = {
         'Role': OnboardingRole,
         'Category': OnboardingCategory,
         'Responsibility': OnboardingResponsibility,
@@ -227,6 +238,8 @@ def create_user_onboarding_models(Base):
         'OnboardingSession': OnboardingSession,
         'AuditLog': OnboardingAuditLog
     }
+    _user_onboarding_models_cache[base_id] = _models
+    return _models
 
 
 def seed_onboarding_data(db, models):

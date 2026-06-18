@@ -23,7 +23,8 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
+import { usePermissions } from '../../../contexts/PermissionContext';
 import { toast } from '../../../utils/toast';
 import { trackFeature } from '../../../services/analytics';
 import ErrorBoundary from '../../common/ErrorBoundary';
@@ -236,6 +237,17 @@ function CelebrationOverlay({ onDismiss }) {
 
 export default function CalendarSetupWizard({ stepComponents = {} }) {
   const navigate = useNavigate();
+  const { isAdmin, isSiteAdmin, isPlatformAdmin } = usePermissions();
+
+  // ---------------------------------------------------------------------------
+  // Role guard — Calendar Setup configures org-wide settings; admins only.
+  // Regular LOs are redirected to their calendar view.
+  // ---------------------------------------------------------------------------
+  const hasAdminAccess = isAdmin || isSiteAdmin || isPlatformAdmin;
+  if (!hasAdminAccess) {
+    return <Navigate to="/calendar" replace />;
+  }
+
   const contentRef = useRef(null);
   const announceRef = useRef(null);
   const wizardStartTime = useRef(Date.now());

@@ -8,6 +8,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import { toast } from '../utils/toast';
 
+// Max records the leads/loans list endpoints will return in a single request.
+// The backend hard-clamps `limit` to MAX_PAGE_SIZE (backend/utils/pagination.py
+// = 500), so requesting more has no effect — records beyond this cap are simply
+// not returned. The Leads/Loans pages filter and search client-side over the
+// full array (filter-tab counts, multi-field search, "select all", duplicate
+// detection all depend on having the whole dataset), so true server-side
+// pagination is a dedicated UX task — not a drop-in change. Until then this is
+// the explicit ceiling; consumers detect when a result hits it (see LIST_PAGE_SIZE
+// usage in Leads.js / Loans.js) and warn the user instead of silently truncating.
+export const LIST_PAGE_SIZE = 500;
+
 // Use the shared axios instance so auth refresh, CSRF, and interceptors all apply
 const fetchWithAuth = async (endpoint, options = {}) => {
   const method = (options.method || 'GET').toLowerCase();
@@ -29,7 +40,7 @@ export const useLeads = (options = {}) => {
   return useQuery({
     queryKey: ['leads'],
     queryFn: async () => {
-      const data = await fetchWithAuth('/api/v1/leads/?limit=500');
+      const data = await fetchWithAuth(`/api/v1/leads/?limit=${LIST_PAGE_SIZE}`);
       return Array.isArray(data) ? data : (data?.items ?? []);
     },
     staleTime: 1000 * 60 * 2, // 2 minutes
@@ -66,7 +77,7 @@ export const useLoans = (options = {}) => {
   return useQuery({
     queryKey: ['loans'],
     queryFn: async () => {
-      const data = await fetchWithAuth('/api/v1/loans/?limit=500');
+      const data = await fetchWithAuth(`/api/v1/loans/?limit=${LIST_PAGE_SIZE}`);
       return Array.isArray(data) ? data : (data?.items ?? []);
     },
     staleTime: 1000 * 60 * 2,

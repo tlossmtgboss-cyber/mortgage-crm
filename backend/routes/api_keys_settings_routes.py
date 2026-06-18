@@ -115,7 +115,11 @@ class APIKeyCreate(BaseModel):
             'read:documents', 'write:documents', 'delete:documents',
             'read:analytics', 'read:reports',
             'webhooks:manage', 'integrations:manage',
-            'admin:full'
+            'admin:full',
+            # Scheduler scopes (least-privilege for third-party integrations)
+            'read:appointments', 'write:appointments',
+            'read:scheduler', 'write:scheduler',
+            'public:booking',
         ]
         for scope in v:
             if scope not in valid_scopes:
@@ -681,9 +685,15 @@ async def get_available_scopes():
             {"id": "delete:documents", "name": "Delete Documents", "description": "Delete documents", "category": "documents"},
             {"id": "read:analytics", "name": "Read Analytics", "description": "View analytics data", "category": "analytics"},
             {"id": "read:reports", "name": "Read Reports", "description": "Generate and view reports", "category": "analytics"},
-            {"id": "webhooks:manage", "name": "Manage Webhooks", "description": "Create and manage webhooks", "category": "admin"},
+            {"id": "webhooks:manage", "name": "Manage Webhooks", "description": "Register, delete, and test webhook subscriptions for appointment events", "category": "admin"},
             {"id": "integrations:manage", "name": "Manage Integrations", "description": "Configure integrations", "category": "admin"},
-            {"id": "admin:full", "name": "Full Admin Access", "description": "Full administrative access", "category": "admin"}
+            {"id": "admin:full", "name": "Full Admin Access", "description": "Full administrative access", "category": "admin"},
+            # Scheduler scopes — grant minimal access to third-party integrations
+            {"id": "read:appointments", "name": "Read Appointments", "description": "Read appointment data, slots, and availability windows", "category": "scheduler"},
+            {"id": "write:appointments", "name": "Write Appointments", "description": "Create, update, reschedule, and cancel appointments", "category": "scheduler"},
+            {"id": "read:scheduler", "name": "Read Scheduler Config", "description": "Read scheduler configuration, appointment types, and booking page links", "category": "scheduler"},
+            {"id": "write:scheduler", "name": "Write Scheduler Config", "description": "Modify scheduler configuration and appointment type definitions", "category": "scheduler"},
+            {"id": "public:booking", "name": "Public Booking", "description": "Access public booking endpoints for embedded booking widgets", "category": "scheduler"},
         ]
 
         return success_response(scopes, f"Retrieved {len(scopes)} available scopes")

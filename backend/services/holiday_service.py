@@ -33,6 +33,10 @@ logger = logging.getLogger(__name__)
 # MODEL FACTORY
 # ============================================================================
 
+from model_cache import base_memoize
+
+
+@base_memoize
 def create_holiday_models(Base):
     """
     Factory to create Holiday and PTORequest models with the provided Base.

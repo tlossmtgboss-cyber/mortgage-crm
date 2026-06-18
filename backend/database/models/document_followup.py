@@ -169,7 +169,7 @@ class FollowupCampaign(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, nullable=True, index=True)  # ref organizations.id
+    organization_id = Column(Integer, nullable=True)  # ref organizations.id (indexed via __table_args__)
     loan_id = Column(Integer, nullable=False)  # ref loans.id
     borrower_id = Column(Integer, nullable=True)  # ref leads.id
 
@@ -313,7 +313,7 @@ class DocumentAppointment(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, nullable=True, index=True)  # ref organizations.id
+    organization_id = Column(Integer, nullable=True)  # ref organizations.id (indexed via __table_args__)
     loan_id = Column(Integer, nullable=False)  # ref loans.id
     borrower_id = Column(Integer, nullable=True)  # ref leads.id
     campaign_id = Column(Integer, nullable=True)  # ref document_followup_campaigns.id
@@ -413,7 +413,7 @@ class FollowupTemplate(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, nullable=True, index=True)  # ref organizations.id
+    organization_id = Column(Integer, nullable=True)  # ref organizations.id (indexed via __table_args__)
 
     # Template identity
     name = Column(String(255), nullable=False)
