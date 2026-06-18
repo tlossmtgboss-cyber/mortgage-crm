@@ -937,6 +937,7 @@ class TestTeamReassignmentE2E:
 
         from scheduler_appointment_routes import _check_appointment_conflict
         from fastapi import HTTPException
+        import asyncio
 
         # LO B has a conflicting appointment
         conflict = MagicMock()
@@ -944,12 +945,12 @@ class TestTeamReassignmentE2E:
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = conflict
 
         with pytest.raises(HTTPException) as exc_info:
-            _check_appointment_conflict(
+            asyncio.run(_check_appointment_conflict(
                 mock_db, assigned_user_id=20,
                 start_time=datetime(2026, 3, 15, 10, 0),
                 end_time=datetime(2026, 3, 15, 10, 30),
                 org_id=1,
-            )
+            ))
         assert exc_info.value.status_code == 409
 
 
