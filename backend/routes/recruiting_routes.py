@@ -4,7 +4,7 @@ API endpoints for Master Manager Platform Phase 2 - Recruiting Engine.
 """
 
 import html as html_mod
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional, List
@@ -18,6 +18,8 @@ from sqlalchemy.exc import SQLAlchemyError
 import json
 import logging
 import os
+import hmac
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -1193,6 +1195,45 @@ async def create_offer(
         created_by=current_user.id,
         organization_id=current_user.organization_id
     )
+
+    # Trigger background check if Checkr is configured and no pending check exists
+    if os.environ.get("CHECKR_API_KEY"):
+        existing = db.execute(text("""
+            SELECT checkr_report_id FROM mm_offers
+            WHERE candidate_id = :cid AND organization_id = :org_id
+            AND checkr_report_id IS NOT NULL
+            LIMIT 1
+        """), {"cid": candidate_id, "org_id": current_user.organization_id}).fetchone()
+
+        if not existing:
+            candidate_row = db.execute(text("""
+                SELECT email, first_name, last_name
+                FROM mm_candidates
+                WHERE id = :cid AND organization_id = :org_id
+            """), {"cid": candidate_id, "org_id": current_user.organization_id}).fetchone()
+
+            if candidate_row:
+                from integrations.checkr_service import create_background_check
+                bgcheck = await create_background_check({
+                    "email": candidate_row.email,
+                    "first_name": candidate_row.first_name,
+                    "last_name": candidate_row.last_name,
+                })
+                if bgcheck.get("report_id"):
+                    db.execute(text("""
+                        UPDATE mm_offers
+                        SET checkr_report_id = :rid,
+                            checkr_invitation_url = :url,
+                            checkr_status = 'pending'
+                        WHERE id = :offer_id
+                    """), {
+                        "rid": bgcheck["report_id"],
+                        "url": bgcheck.get("invitation_url"),
+                        "offer_id": result["id"],
+                    })
+                    db.commit()
+                    result["checkr_invitation_url"] = bgcheck.get("invitation_url")
+
     return result
 
 
@@ -1261,7 +1302,7 @@ async def send_offer(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Send an offer to the candidate."""
+    """Send an offer to the candidate and initiate e-signature."""
     service = RecruitingService(db)
     try:
         result = await service.send_offer(
@@ -1270,9 +1311,57 @@ async def send_offer(
             expires_in_days=data.expires_in_days,
             organization_id=current_user.organization_id
         )
-        return result
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(status_code=404, detail="Not found")
+
+    # Fetch offer + candidate details for envelope creation
+    offer_row = db.execute(text("""
+        SELECT o.role_title, o.salary_amount, o.salary_type,
+               o.start_date, o.employment_type, o.benefits_summary, o.pto_days,
+               c.email as candidate_email,
+               c.first_name || ' ' || c.last_name as candidate_name,
+               org.name as org_name
+        FROM mm_offers o
+        JOIN mm_candidates c ON c.id = o.candidate_id
+        JOIN organizations org ON org.id = o.organization_id
+        WHERE o.id = :offer_id AND o.organization_id = :org_id
+    """), {"offer_id": offer_id, "org_id": current_user.organization_id}).fetchone()
+
+    if offer_row:
+        from integrations.esignature_service import create_offer_envelope
+        offer_data = {
+            "role_title": offer_row.role_title,
+            "salary_amount": offer_row.salary_amount,
+            "salary_type": offer_row.salary_type,
+            "start_date": offer_row.start_date.isoformat() if offer_row.start_date else None,
+            "employment_type": offer_row.employment_type,
+            "benefits_summary": offer_row.benefits_summary,
+            "pto_days": offer_row.pto_days,
+        }
+        envelope = await create_offer_envelope(
+            offer_data=offer_data,
+            candidate_email=offer_row.candidate_email,
+            candidate_name=offer_row.candidate_name,
+            org_name=offer_row.org_name or "Your Company",
+        )
+        if envelope.get("envelope_id"):
+            db.execute(text("""
+                UPDATE mm_offers
+                SET envelope_id = :eid,
+                    signing_url = :url,
+                    envelope_status = 'sent'
+                WHERE id = :offer_id
+            """), {
+                "eid": envelope["envelope_id"],
+                "url": envelope.get("signing_url"),
+                "offer_id": offer_id,
+            })
+            db.commit()
+        result["signing_url"] = envelope.get("signing_url")
+        result["envelope_id"] = envelope.get("envelope_id")
+        result["esign_fallback"] = envelope.get("fallback", False)
+
+    return result
 
 
 @router.post("/offers/{offer_id}/respond")
@@ -1317,6 +1406,112 @@ async def withdraw_offer(
 
     db.commit()
     return {"id": offer_id, "status": "withdrawn"}
+
+
+# =============================================================================
+# E-SIGNATURE WEBHOOK (no auth — HelloSign calls this directly)
+# =============================================================================
+
+@router.post("/offers/{offer_id}/sign-webhook", include_in_schema=False)
+async def esign_webhook(
+    offer_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Receive HelloSign signature events for a specific offer."""
+    raw_body = await request.body()
+    sig_header = request.headers.get("X-HelloSign-Signature", "")
+
+    hellosign_key = os.environ.get("HELLOSIGN_API_KEY", "")
+    if hellosign_key and sig_header:
+        expected = hmac.new(hellosign_key.encode(), raw_body, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig_header):
+            raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    try:
+        payload = json.loads(raw_body)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    from integrations.esignature_service import handle_webhook_event
+    event = await handle_webhook_event(payload)
+    event_type = event.get("event_type", "")
+
+    if event_type == "signature_request_signed":
+        client_ip = request.client.host if request.client else None
+        db.execute(text("""
+            UPDATE mm_offers
+            SET status = 'signed',
+                signed_at = NOW(),
+                signed_ip = :ip,
+                envelope_status = 'completed',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :offer_id
+        """), {"ip": client_ip, "offer_id": offer_id})
+        db.commit()
+
+    elif event_type == "signature_request_declined":
+        db.execute(text("""
+            UPDATE mm_offers
+            SET status = 'declined',
+                envelope_status = 'declined',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :offer_id
+        """), {"offer_id": offer_id})
+        db.commit()
+
+    # HelloSign expects a plain 200 with "Hello API Event Received"
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse("Hello API Event Received")
+
+
+# =============================================================================
+# BACKGROUND CHECK WEBHOOK (no auth — Checkr calls this directly)
+# =============================================================================
+
+@router.post("/offers/{offer_id}/background-check/webhook", include_in_schema=False)
+async def bgcheck_webhook(
+    offer_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Receive Checkr background check status updates for a specific offer."""
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    from integrations.checkr_service import handle_webhook
+    event = await handle_webhook(payload)
+    status = event.get("status", "")
+    report_id = event.get("report_id", "")
+
+    if status and report_id:
+        # Find the offer by report_id (offer_id in path is a hint; verify via report_id)
+        offer_row = db.execute(text("""
+            UPDATE mm_offers
+            SET checkr_status = :status,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :offer_id AND checkr_report_id = :rid
+            RETURNING candidate_id, organization_id
+        """), {"status": status, "offer_id": offer_id, "rid": report_id}).fetchone()
+
+        if offer_row and status == "consider":
+            # Flag the candidate with a note
+            db.execute(text("""
+                INSERT INTO mm_candidate_notes
+                    (candidate_id, organization_id, note_type, content, created_by)
+                VALUES
+                    (:cid, :org_id, 'background_check', :content, NULL)
+                ON CONFLICT DO NOTHING
+            """), {
+                "cid": offer_row.candidate_id,
+                "org_id": offer_row.organization_id,
+                "content": f"Background check for offer {offer_id} returned 'consider' status — review required.",
+            })
+        db.commit()
+
+    return {"received": True}
 
 
 # =============================================================================
