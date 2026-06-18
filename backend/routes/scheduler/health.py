@@ -480,7 +480,6 @@ def _count_registered_modules() -> int:
         return 0
 
 
-
 def _check_sync_staleness() -> dict:
     """Read per-org Redis heartbeat keys set by calendar_sync_tasks and return
     any orgs whose last successful sync was >30 minutes ago.

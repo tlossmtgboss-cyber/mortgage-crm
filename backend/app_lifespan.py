@@ -27,16 +27,22 @@ def register_startup_event(app: FastAPI, engine, scheduler, SessionLocal, _start
             logger.info("Skipping startup DB operations (TESTING=1)")
             return
 
-        # ── Alembic migrations (run FIRST, before legacy migrations) ────
+        # ── Alembic head canary (read-only — migrations run by start.py) ────
+        # The authoritative migration runner is start.py → run_migrations.py
+        # (advisory-locked, exits non-zero on failure). This check only
+        # warns if the DB is somehow still behind head after that path ran.
         try:
-            from alembic_runner import run_alembic_migrations
-            alembic_ok = run_alembic_migrations()
+            from alembic_runner import check_alembic_head
+            alembic_ok = check_alembic_head()
             if alembic_ok:
-                logger.info("Alembic migrations: OK")
+                logger.info("Alembic head check: OK")
             else:
-                logger.warning("Alembic migrations: FAILED (continuing with legacy migrations)")
+                logger.warning(
+                    "Alembic head check: DB is BEHIND head — "
+                    "check run_migrations.py output in deployment logs"
+                )
         except Exception as e:
-            logger.error("Alembic runner import/execution error: %s", e)
+            logger.error("Alembic head check error: %s", e)
 
         # Run all startup migrations (legacy — will be phased out)
         from startup_migrations import run_all_startup_migrations

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 INDEX_NAME = "idx_appointment_active"
 TABLE_NAME = "scheduler_appointments"
 
-# Applied migration fix: status literals normalized to lowercase
+# status literals lowercase-only — matches VARCHAR after enum-to-VARCHAR migration
 DDL = (
     f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {INDEX_NAME} "
     f"ON {TABLE_NAME} (organization_id, assigned_user_id, scheduled_start) "
