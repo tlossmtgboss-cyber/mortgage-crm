@@ -311,9 +311,6 @@ const CarouselBuilder = lazyRetry(() => import('../pages/CarouselBuilder/Carouse
 // Master Manager pages
 const MasterManagerCapacity = lazyRetry(() => import('../pages/MasterManager/CapacityCommandCenter'));
 
-// Recruiting Platform (standalone scheduling platform with smart calendar)
-const RecruitingPlatform = lazyRetry(() => import('../pages/RecruitingPlatform'));
-const InterviewCalendar = lazyRetry(() => import('../pages/RecruitingPlatform/InterviewCalendar'));
 const MilestonesBoard = lazyRetry(() => import('../pages/RecruitingPlatform/MilestonesBoard'));
 const CandidateBookingPage = lazyRetry(() => import('../pages/RecruitingPlatform/CandidateBookingPage'));
 const RecruitInterviewCalendar = lazyRetry(() => import('../pages/RecruitPlatform/RecruitInterviewCalendar'));
@@ -768,9 +765,9 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/master-manager" path="/master-manager" element={withMainLayout(MasterManagerCapacity)} />,
 
     // Recruiting Platform (standalone scheduling platform)
-    <Route key="/recruiting" path="/recruiting" element={withMainLayout(RecruitingPlatform)} />,
-    <Route key="/recruiting/interviews" path="/recruiting/interviews" element={withMainLayout(InterviewCalendar)} />,
-    <Route key="/recruiting/milestones" path="/recruiting/milestones" element={withMainLayout(MilestonesBoard)} />,
+    <Route key="/recruiting" path="/recruiting" element={<Navigate to="/recruit/dashboard" replace />} />,
+    <Route key="/recruiting/interviews" path="/recruiting/interviews" element={<Navigate to="/recruit/interviews" replace />} />,
+    <Route key="/recruiting/milestones" path="/recruiting/milestones" element={<Navigate to="/recruit/milestones" replace />} />,
 
     // Settings
     <Route key="/settings" path="/settings" element={withMainLayout(Settings)} />,
@@ -913,6 +910,7 @@ export function getRoutes(layoutProps, options = {}) {
       <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><RecruitDashboard /></Suspense>} />
       <Route path="jobs" element={<Suspense fallback={<PageLoader />}><RecruitJobs /></Suspense>} />
       <Route path="interviews" element={<Suspense fallback={<PageLoader />}><RecruitInterviewCalendar /></Suspense>} />
+      <Route path="milestones" element={<Suspense fallback={<PageLoader />}><MilestonesBoard /></Suspense>} />
       <Route path="license-manager" element={<Suspense fallback={<PageLoader />}><LicenseManager /></Suspense>} />
       <Route path="website-builder" element={<Suspense fallback={<PageLoader />}><RecruitWebsiteBuilder /></Suspense>} />
       <Route path="knowledge-base" element={<Suspense fallback={<PageLoader />}><RecruitKnowledgeBase /></Suspense>} />

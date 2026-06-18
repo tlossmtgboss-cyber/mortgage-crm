@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getToken } from '../../utils/tokenStore';
 import { API_BASE_URL } from '../../services/api';
-import RecruitingPlatformLayout from './RecruitingPlatformLayout';
+import { useRecruitPlatform } from '../../contexts/RecruitPlatformContext';
 import './RecruitingPlatform.css';
 
 const MILESTONE_LABELS = {
@@ -56,6 +55,7 @@ function MilestoneCard({ item, onComplete, onEdit }) {
 }
 
 export default function MilestonesBoard() {
+  const { recruitToken } = useRecruitPlatform();
   const [data, setData] = useState({ overdue: [], this_week: [], later: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -65,7 +65,7 @@ export default function MilestonesBoard() {
     setLoading(true);
     setError(null);
     try {
-      const token = getToken();
+      const token = recruitToken;
       const res = await fetch(
         `${API_BASE_URL}/api/v1/recruit-calendar/milestones/upcoming?days=${days}`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -77,13 +77,13 @@ export default function MilestonesBoard() {
     } finally {
       setLoading(false);
     }
-  }, [days]);
+  }, [days, recruitToken]);
 
   useEffect(() => { fetchMilestones(); }, [fetchMilestones]);
 
   const handleComplete = async (milestoneId) => {
     try {
-      const token = getToken();
+      const token = recruitToken;
       await fetch(
         `${API_BASE_URL}/api/v1/recruit-calendar/milestones/${milestoneId}/complete`,
         { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
@@ -106,7 +106,7 @@ export default function MilestonesBoard() {
   ];
 
   return (
-    <RecruitingPlatformLayout>
+    <div className="rp-page">
       <div className="rp-page-header">
         <div>
           <div className="rp-page-title">Milestones</div>
@@ -159,6 +159,6 @@ export default function MilestonesBoard() {
           ))}
         </div>
       )}
-    </RecruitingPlatformLayout>
+    </div>
   );
 }

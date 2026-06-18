@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useRecruitPlatform } from '../../../contexts/RecruitPlatformContext';
 import './Dashboard.css';
 
@@ -181,12 +182,15 @@ function ApplicantDetail({ applicant, recruitToken, onClose, onStatusChange }) {
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function RecruitDashboard() {
   const { recruitToken } = useRecruitPlatform();
+  const navigate = useNavigate();
   const [applicants, setApplicants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [selected, setSelected] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [upcomingInterviews, setUpcomingInterviews] = useState([]);
 
   const fetchApplicants = useCallback(() => {
     setLoading(true);
@@ -200,6 +204,30 @@ export default function RecruitDashboard() {
   }, [recruitToken]);
 
   useEffect(() => { fetchApplicants(); }, [fetchApplicants]);
+
+  useEffect(() => {
+    if (!recruitToken) return;
+    const today = new Date();
+    const headers = { Authorization: `Bearer ${recruitToken}` };
+    Promise.allSettled([
+      fetch(`${API_BASE}/api/v1/recruit-calendar/interviews/calendar?year=${today.getFullYear()}&month=${today.getMonth() + 1}`, { headers }).then(r => r.json()),
+      fetch(`${API_BASE}/api/v1/recruit-calendar/milestones/upcoming?days=7`, { headers }).then(r => r.json()),
+    ]).then(([iRes, mRes]) => {
+      const evts = iRes.status === 'fulfilled' ? (iRes.value.events || []) : [];
+      const mils = mRes.status === 'fulfilled' ? mRes.value : {};
+      setStats({
+        interviews_this_month: evts.length,
+        milestones_overdue: (mils.overdue || []).length,
+        milestones_this_week: (mils.this_week || []).length,
+      });
+      const now = new Date();
+      setUpcomingInterviews(
+        evts.filter(e => e.start && new Date(e.start) >= now)
+          .sort((a, b) => new Date(a.start) - new Date(b.start))
+          .slice(0, 5)
+      );
+    });
+  }, [recruitToken]);
 
   const handleStatusChange = (id, newStatus) => {
     setApplicants(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
@@ -225,6 +253,37 @@ export default function RecruitDashboard() {
 
   return (
     <div className="rd-layout">
+      {/* Stats row */}
+      {stats && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, padding: '16px 20px 0', background: '#f8fafc', borderBottom: '1px solid #e8eaed' }}>
+          {[
+            { label: 'Interviews This Month', value: stats.interviews_this_month, onClick: () => navigate('/recruit/interviews') },
+            { label: 'Milestones Overdue', value: stats.milestones_overdue, warn: stats.milestones_overdue > 0, onClick: () => navigate('/recruit/milestones') },
+            { label: 'Milestones This Week', value: stats.milestones_this_week, onClick: () => navigate('/recruit/milestones') },
+            { label: 'Total Applicants', value: applicants.length },
+            { label: 'Active (not rejected)', value: applicants.filter(a => a.status !== 'rejected').length },
+          ].map(s => (
+            <div key={s.label} onClick={s.onClick} style={{ background: '#fff', border: `1px solid ${s.warn ? '#fca5a5' : '#e8eaed'}`, borderRadius: 8, padding: '10px 14px', cursor: s.onClick ? 'pointer' : 'default' }}>
+              <div style={{ fontSize: 22, fontWeight: 700, color: s.warn ? '#b91c1c' : '#1a1f2e' }}>{s.value ?? '—'}</div>
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {upcomingInterviews.length > 0 && (
+        <div style={{ padding: '10px 20px', background: '#f8fafc', borderBottom: '1px solid #e8eaed', display: 'flex', gap: 8, overflowX: 'auto', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', whiteSpace: 'nowrap' }}>UPCOMING:</span>
+          {upcomingInterviews.map(ev => (
+            <div key={ev.id} onClick={() => navigate('/recruit/interviews')} style={{ background: '#fff', border: '1px solid #e8eaed', borderRadius: 6, padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap', cursor: 'pointer', color: '#374151' }}>
+              <span style={{ color: '#B8924A', fontWeight: 600 }}>
+                {new Date(ev.start).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </span>
+              {' · '}{ev.title}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Top bar */}
       <div className="rd-topbar">
         <span className="rd-topbar-title">Pipeline</span>
