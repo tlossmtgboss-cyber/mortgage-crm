@@ -540,6 +540,9 @@ async def update_candidate_status(
             detail="disposition_code is required when rejecting or withdrawing a candidate"
         )
 
+    if data.skip_score_gate and current_user.role not in ("admin", "platform_admin", "site_admin"):
+        raise HTTPException(status_code=403, detail="Only admins can override score gates")
+
     service = RecruitingService(db)
     try:
         result = await service.update_candidate_status(
@@ -851,6 +854,29 @@ async def submit_feedback(
     db: Session = Depends(get_db),
 ):
     """Submit feedback for an interview."""
+    import json as _json
+    interview_row = db.execute(text("""
+        SELECT interviewer_user_ids, primary_interviewer_id
+        FROM mm_interviews
+        WHERE id = :id AND organization_id = :org_id
+    """), {"id": interview_id, "org_id": current_user.organization_id}).fetchone()
+
+    if not interview_row:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    interviewer_ids = interview_row.interviewer_user_ids
+    if isinstance(interviewer_ids, str):
+        interviewer_ids = _json.loads(interviewer_ids)
+    interviewer_ids = interviewer_ids or []
+
+    is_admin = current_user.role in ("admin", "platform_admin", "site_admin")
+    is_interviewer = (
+        current_user.id in interviewer_ids
+        or current_user.id == interview_row.primary_interviewer_id
+    )
+    if not (is_admin or is_interviewer):
+        raise HTTPException(status_code=403, detail="Only assigned interviewers can submit feedback")
+
     service = RecruitingService(db)
     try:
         result = await service.submit_interview_feedback(
