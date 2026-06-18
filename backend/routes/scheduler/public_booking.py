@@ -727,8 +727,7 @@ async def confirm_public_booking(
         # Anti-spam: per-IP booking rate limit
         await _check_booking_ip_rate_limit(request)
 
-        # Anti-spam: per-email booking rate limit
-        _check_booking_email_rate_limit(db, booking_data.attendee_email)
+        # Anti-spam: per-email booking rate limit (called below after org_id is resolved)
 
         # Bot protection: Cloudflare Turnstile verification
         # Always run verification -- _verify_turnstile_token handles missing key
@@ -791,6 +790,9 @@ async def confirm_public_booking(
         # Derive org_id from the booking link for tenant isolation
         link_org_id = getattr(link, 'organization_id', None)
 
+        # Anti-spam: per-email booking rate limit (now org_id is available)
+        _check_booking_email_rate_limit(db, booking_data.attendee_email, org_id=link_org_id)
+
         if link.max_per_person is not None:
             max_per_query = db.query(Appointment).filter(
                 Appointment.attendee_email == booking_data.attendee_email,
@@ -818,6 +820,11 @@ async def confirm_public_booking(
         # M12: Booking dedup window — idempotent response for double-clicks
         # ==================================================================
         from sqlalchemy import text as _sql_text
+        _dedup_params = {"email": attendee_email.strip().lower(), "start": slot_start}
+        _dedup_org_clause = ""
+        if link_org_id:
+            _dedup_org_clause = "AND organization_id = :org_id "
+            _dedup_params["org_id"] = link_org_id
         _dedup_row = db.execute(
             _sql_text(
                 "SELECT id, scheduled_start, scheduled_end "
@@ -825,10 +832,11 @@ async def confirm_public_booking(
                 "WHERE LOWER(attendee_email) = :email "
                 "AND scheduled_start = :start "
                 "AND created_at > NOW() - INTERVAL '60 seconds' "
+                + _dedup_org_clause +
                 "AND status NOT IN ('cancelled', 'rescheduled') "
                 "ORDER BY created_at DESC LIMIT 1"
             ),
-            {"email": attendee_email.strip().lower(), "start": slot_start},
+            _dedup_params,
         ).fetchone()
         if _dedup_row:
             logger.info(f"Dedup hit: returning existing appointment {_dedup_row.id} for {_mask_email(attendee_email)}")
@@ -1524,8 +1532,10 @@ async def confirm_website_demo_booking(
         # Anti-spam: per-IP booking rate limit
         await _check_booking_ip_rate_limit(http_request)
 
-        # Anti-spam: per-email booking rate limit
-        _check_booking_email_rate_limit(db, request.attendee_email)
+        # Anti-spam: per-email booking rate limit (org_id from request for tenant isolation)
+        _check_booking_email_rate_limit(
+            db, request.attendee_email, org_id=getattr(request, 'organization_id', None)
+        )
 
         from sqlalchemy import text
 

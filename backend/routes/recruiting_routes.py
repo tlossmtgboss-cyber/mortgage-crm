@@ -1423,7 +1423,9 @@ async def esign_webhook(
     sig_header = request.headers.get("X-HelloSign-Signature", "")
 
     hellosign_key = os.environ.get("HELLOSIGN_API_KEY", "")
-    if hellosign_key and sig_header:
+    if hellosign_key:
+        if not sig_header:
+            raise HTTPException(status_code=400, detail="Missing webhook signature")
         expected = hmac.new(hellosign_key.encode(), raw_body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, sig_header):
             raise HTTPException(status_code=400, detail="Invalid webhook signature")

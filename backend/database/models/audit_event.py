@@ -65,9 +65,9 @@ class AuditEvent(Base):
         default="success",
     )
 
-    # Who caused it
+    # Who caused it — Integer FK matching users.id (Integer primary key)
     actor_id = Column(
-        UUID(as_uuid=True),
+        Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,

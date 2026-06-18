@@ -198,7 +198,7 @@ class CallSession(Base):
     loan_id = Column(UUID(as_uuid=True), index=True)
     lead_id = Column(UUID(as_uuid=True), index=True)
     contact_id = Column(UUID(as_uuid=True))
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))  # LO conducting call
+    user_id = Column(Integer, ForeignKey('users.id'))  # LO conducting call — Integer FK matching users.id
 
     # Session status
     status = Column(String(30), nullable=False, default='active')
@@ -265,7 +265,7 @@ class CallParticipant(Base):
 
     # Link to existing entities
     contact_id = Column(UUID(as_uuid=True))
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+    user_id = Column(Integer, ForeignKey('users.id'))  # Integer FK matching users.id
 
     # Participation timing
     joined_at = Column(DateTime(timezone=True))

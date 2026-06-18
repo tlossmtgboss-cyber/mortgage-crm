@@ -15,6 +15,39 @@ env:
   NODE_VERSION: '22'
 jobs:
   # ============================================================================
+  # STAGE 0: MIGRATION DISCIPLINE GUARD (Blocking on PRs/feature branches)
+  # ============================================================================
+  no-raw-ddl-in-legacy-files:
+    name: No Raw DDL in Legacy Migration Files
+    runs-on: ubuntu-latest
+    # Only run on PRs / feature branches — skip on pushes to main itself
+    if: github.ref != 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check for new raw DDL in legacy migration files
+        run: |
+          echo "Checking for new CREATE TABLE / ALTER TABLE in legacy migration files..."
+          NEW_DDL=$(git diff origin/main...HEAD -- backend/startup_migrations.py backend/database/init_db.py \
+            | grep -iE '^\+.*(CREATE TABLE|ALTER TABLE)' \
+            | grep -v '^\+\+\+' || true)
+          if [ -n "$NEW_DDL" ]; then
+            echo "::error::New raw DDL detected in legacy migration files."
+            echo ""
+            echo "Offending lines:"
+            echo "$NEW_DDL"
+            echo ""
+            echo "Use Alembic instead:"
+            echo "  alembic revision --autogenerate -m 'description'"
+            echo ""
+            echo "Legacy files (backend/startup_migrations.py, backend/database/init_db.py)"
+            echo "are being phased out. All new schema changes must go through Alembic."
+            exit 1
+          fi
+          echo "OK — no new raw DDL found in legacy migration files."
+  # ============================================================================
   # STAGE 1: CRITICAL TESTS (Blocking)
   # ============================================================================
   unit-tests:

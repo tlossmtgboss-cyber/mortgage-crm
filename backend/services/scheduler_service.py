@@ -1519,7 +1519,10 @@ class SchedulerService:
         try:
             models = {'SlotHold': SlotHold}
 
-            # Step 1: mark all expired-TTL holds as 'expired'
+            # Step 1: mark all expired-TTL holds as 'expired'.
+            # asyncio.run() is safe here because APScheduler uses BackgroundScheduler
+            # (thread pool), NOT AsyncIOScheduler — this job runs in a worker thread
+            # outside the event loop, so there is no "loop already running" conflict.
             result = asyncio.run(shs.cleanup_expired_holds(session, models))
             expired_count = result.get('expired_count', 0)
 
