@@ -37,6 +37,77 @@ class ComplianceError(Exception):
 import os
 import re
 
+
+# ============================================================================
+# AI Voice Disclosure (FCC requirement)
+# ============================================================================
+#
+# The FCC's Feb 2024 Declaratory Ruling confirmed that calls using
+# AI-generated / artificial voices are "artificial voice" calls under the
+# TCPA. In addition, several states (e.g. CA AB 2905) and the FCC require
+# that the AI/artificial nature of the call be disclosed to the recipient,
+# typically at the start of the call.
+#
+# This is a SCAFFOLD: the constant below provides compliant disclosure text
+# and is_ai_disclosure_enabled()/require_ai_disclosure() let the call-placement
+# path verify that disclosure is turned on for AI voice calls. Wiring the
+# disclosure into the actual voice provider's first-utterance / assistant
+# greeting (Vapi/Telnyx) is a separate integration step and MUST be completed
+# before AI voice calls are placed in production.
+
+# Default disclosure spoken at the start of an AI/artificial-voice call.
+AI_VOICE_DISCLOSURE_TEXT = (
+    "Hi, this is an AI assistant calling on behalf of your loan officer. "
+    "This call uses an artificial voice. You can ask to speak with a person "
+    "at any time."
+)
+
+
+def is_ai_disclosure_enabled() -> bool:
+    """Whether AI-voice disclosure is enabled for outbound AI calls.
+
+    Controlled by AI_VOICE_DISCLOSURE_ENABLED (default: enabled). Disclosure
+    is a regulatory requirement, so it defaults ON and must be explicitly
+    disabled (which should only happen for non-AI / human-dialed calls).
+    """
+    return os.getenv("AI_VOICE_DISCLOSURE_ENABLED", "true").strip().lower() not in (
+        "0", "false", "no", "off"
+    )
+
+
+def get_ai_voice_disclosure_text() -> str:
+    """Return the AI/artificial-voice disclosure text to speak at call start.
+
+    Override via AI_VOICE_DISCLOSURE_TEXT env var if a different jurisdiction
+    or brand-specific script is required.
+    """
+    return os.getenv("AI_VOICE_DISCLOSURE_TEXT", "").strip() or AI_VOICE_DISCLOSURE_TEXT
+
+
+def require_ai_disclosure() -> Tuple[bool, Optional[str]]:
+    """Gate check: confirm AI-voice disclosure is enabled before an AI call.
+
+    SCAFFOLD — this verifies the disclosure feature flag and that disclosure
+    text exists. It does NOT verify the text was actually spoken; that must be
+    enforced by the voice-provider integration (e.g. injecting the disclosure
+    as the assistant's first utterance) and is the remaining wiring step.
+
+    Returns:
+        (ok, reason). ok=False blocks the AI call. reason explains why.
+    """
+    if not is_ai_disclosure_enabled():
+        return False, (
+            "AI voice disclosure is disabled (AI_VOICE_DISCLOSURE_ENABLED). "
+            "FCC/state rules require disclosing the use of an artificial voice "
+            "on AI calls — refusing to place AI call without disclosure."
+        )
+    if not get_ai_voice_disclosure_text():
+        return False, (
+            "AI voice disclosure text is empty — refusing to place AI call "
+            "without a disclosure to read to the recipient."
+        )
+    return True, None
+
 _active_calls_org_col_ensured = False
 
 
@@ -1410,6 +1481,75 @@ class ComplianceChecker:
         return True, None
 
     # =========================================================================
+    # AI Voice Consent Check
+    # =========================================================================
+
+    def check_ai_voice_consent(
+        self,
+        phone_number: str,
+        contact_id: Optional[int] = None,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Check AI / artificial-voice consent, distinct from generic call consent.
+
+        Generic call_consent (ChannelPreference.call_consent) covers a live
+        human dialing. The FCC's Feb 2024 ruling treats AI-generated voice as
+        "artificial voice" under the TCPA, which requires PRIOR EXPRESS WRITTEN
+        consent — a stricter standard. This check looks up the dedicated
+        VoiceConsent record (via verify_voice_consent) rather than the generic
+        call_consent flag.
+
+        Args:
+            phone_number: Phone number being called (any format).
+            contact_id:   Optional lead/contact ID (currently informational;
+                          verify_voice_consent matches on phone + org).
+
+        Returns:
+            Tuple of (has_ai_consent, denial_reason). has_ai_consent=True means
+            an AI voice call may proceed.
+        """
+        if self.organization_id is None:
+            # Without org scoping we cannot safely query VoiceConsent.
+            return False, (
+                "AI voice consent check requires organization context — "
+                "blocking AI call (fail-closed)."
+            )
+
+        try:
+            has_consent, _record = verify_voice_consent(
+                phone_number=phone_number,
+                org_id=self.organization_id,
+                db=self.db,
+            )
+        except Exception as e:
+            logger.error(f"AI voice consent check errored: {e}")
+            return False, "AI voice consent check failed — blocking AI call (fail-closed)."
+
+        if not has_consent:
+            reason = (
+                "No prior express written consent on file for AI/artificial-voice "
+                "calls. Outbound AI call blocked per TCPA artificial-voice rules."
+            )
+            self._log_decision(
+                decision_type="ai_voice_consent_check",
+                phone_number=self._normalize_phone(phone_number),
+                decision="blocked",
+                reason=reason,
+                lead_id=contact_id,
+                details={"failure": "no_ai_voice_consent"},
+            )
+            return False, reason
+
+        self._log_decision(
+            decision_type="ai_voice_consent_check",
+            phone_number=self._normalize_phone(phone_number),
+            decision="allowed",
+            reason="AI voice consent verified via VoiceConsent",
+            lead_id=contact_id,
+        )
+        return True, None
+
+    # =========================================================================
     # Full Compliance Check
     # =========================================================================
 
@@ -1417,7 +1557,8 @@ class ComplianceChecker:
         self,
         phone_number: str,
         agent_id: int,
-        contact_id: Optional[int] = None
+        contact_id: Optional[int] = None,
+        is_ai_voice: bool = False,
     ) -> Dict[str, Any]:
         """
         Run all compliance checks for a phone number
@@ -1426,6 +1567,9 @@ class ComplianceChecker:
             phone_number: Phone number to check
             agent_id: Agent attempting to call
             contact_id: Optional lead/contact ID for consent lookup
+            is_ai_voice: True if this is an AI/artificial-voice call. When set,
+                the stricter AI-voice consent check and AI-disclosure gate are
+                applied in addition to the standard call checks.
 
         Returns:
             Dict with compliance status and any issues
@@ -1442,6 +1586,21 @@ class ComplianceChecker:
         if not has_consent:
             result["can_call"] = False
             result["issues"].append(f"No call consent: {consent_reason}")
+
+        # AI/artificial-voice calls require the stricter prior-express-written
+        # consent and an AI-use disclosure (FCC Feb 2024 ruling + state law).
+        if is_ai_voice:
+            ai_disclosure_ok, ai_disclosure_reason = require_ai_disclosure()
+            if not ai_disclosure_ok:
+                result["can_call"] = False
+                result["issues"].append(f"AI disclosure: {ai_disclosure_reason}")
+
+            has_ai_consent, ai_consent_reason = self.check_ai_voice_consent(
+                phone_number, contact_id
+            )
+            if not has_ai_consent:
+                result["can_call"] = False
+                result["issues"].append(f"No AI voice consent: {ai_consent_reason}")
 
         # Check DNC status
         is_dnc, dnc_reason = self.check_dnc(phone_number)

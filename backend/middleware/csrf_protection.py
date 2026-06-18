@@ -168,8 +168,10 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
 
         # Skip if request uses X-API-Key header with a valid key (machine-to-machine auth).
         # Validate against known service keys to prevent CSRF bypass via empty/arbitrary header.
+        # Require a present key of at least 32 chars AND a non-empty configured key before
+        # comparing — an unset env var (expected_key="") must never match an empty/short header.
         api_key = request.headers.get("X-API-Key")
-        if api_key:
+        if api_key and len(api_key) >= 32:
             for env_name in ("ADMIN_API_KEY", "CRM_API_KEY"):
                 expected_key = os.getenv(env_name, "").strip()
                 if expected_key and secrets.compare_digest(api_key, expected_key):

@@ -13,6 +13,7 @@ OPTIMIZATION v3: Intent-Based Tool Loading
 import asyncio
 import logging
 import os
+import re
 from typing import Any, Callable, Dict, Optional, Literal
 from datetime import datetime, timezone
 
@@ -323,6 +324,8 @@ async def run_orchestrator(
     document_context: Optional[str] = None,
     active_lead_id: Optional[int] = None,
     active_loan_id: Optional[int] = None,
+    realtime: bool = False,
+    pipeline_timeout_seconds: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Run the full orchestrator pipeline on a user message.
@@ -571,11 +574,50 @@ async def run_orchestrator(
         MAX_RETRIES = 2
         BACKOFF_SCHEDULE = [1.0, 3.0]  # Exponential backoff: 1s, 3s
 
+        # Wall-clock timeout for the whole pipeline. recursion_limit caps graph
+        # steps but NOT latency — a slow tool or LLM call can hang far past a
+        # caller's patience. For voice/real-time callers we enforce a tight
+        # budget and return a graceful fallback on timeout so the call doesn't
+        # dead-air. Resolution order: explicit arg > env > sensible default.
+        if pipeline_timeout_seconds is not None:
+            _pipeline_timeout = pipeline_timeout_seconds
+        elif realtime:
+            _pipeline_timeout = float(os.getenv("AI_VOICE_PIPELINE_TIMEOUT_SECONDS", "8"))
+        else:
+            _pipeline_timeout = float(os.getenv("AI_PIPELINE_TIMEOUT_SECONDS", "0") or 0) or None
+
         for attempt in range(MAX_RETRIES + 1):
             try:
-                final_state = await orchestrator.ainvoke(state, config={"recursion_limit": 15})
+                if _pipeline_timeout and _pipeline_timeout > 0:
+                    final_state = await asyncio.wait_for(
+                        orchestrator.ainvoke(state, config={"recursion_limit": 15}),
+                        timeout=_pipeline_timeout,
+                    )
+                else:
+                    final_state = await orchestrator.ainvoke(state, config={"recursion_limit": 15})
                 circuit.record_success()
                 break
+            except asyncio.TimeoutError:
+                # Hard wall-clock timeout — do NOT retry (we're already over
+                # budget) and return a graceful fallback immediately.
+                logger.warning(
+                    f"[ORCHESTRATOR] Pipeline timed out after {_pipeline_timeout:.1f}s "
+                    f"(realtime={realtime}, rid={request_id}) — returning fallback"
+                )
+                clear_request_id()
+                return {
+                    "response": (
+                        "Sorry, that's taking me a little longer than expected. "
+                        "Could you say that again, or give me one more moment?"
+                        if realtime else
+                        "That request is taking longer than expected. Please try again "
+                        "or narrow it down a bit."
+                    ),
+                    "error": "pipeline_timeout",
+                    "error_type": "timeout",
+                    "request_id": request_id,
+                    "processing_time_seconds": (datetime.now(timezone.utc) - start_time).total_seconds(),
+                }
             except Exception as workflow_err:
                 is_retryable = _is_retryable(workflow_err)
 
@@ -709,9 +751,40 @@ async def run_orchestrator(
         # HALLUCINATION VERIFICATION
         # Blocking for compliance-sensitive intents, background for others
         # ================================================================
-        BLOCKING_VERIFICATION_INTENTS = {"compliance", "rates", "sla"}
+        # Intents whose responses are blocked on low faithfulness. Beyond the
+        # original compliance set, this now covers borrower-facing intents that
+        # routinely quote rates / dollar figures — a hallucinated rate or
+        # payment quoted to a borrower is a real-money/legal risk.
+        BLOCKING_VERIFICATION_INTENTS = {
+            "compliance", "rates", "sla",
+            # Borrower-facing factual intents that quote numbers:
+            "pricing", "revenue", "profit", "pre_approval", "structuring",
+            "down_payment", "closing", "borrower", "secondary", "investor",
+        }
+        # Intents that are borrower-facing (vs internal LO analytics). For these,
+        # a response containing a quoted rate or dollar figure is escalated to
+        # blocking verification even if the intent isn't in the set above.
+        BORROWER_FACING_INTENTS = {
+            "rates", "pricing", "pre_approval", "structuring", "down_payment",
+            "closing", "borrower", "post_closing", "credit_repair",
+        }
+        # Quoted rate (e.g. "6.5%", "6.500 %") or dollar figure (e.g. "$1,234",
+        # "$2,500.00"). Used to escalate borrower-facing numeric responses.
+        _QUOTED_FIGURE_RE = re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?|\d+(?:\.\d+)?\s?%")
         verification_enabled = os.getenv("ENABLE_HALLUCINATION_VERIFICATION", "true").lower() == "true"
         verification_timeout = int(os.getenv("HALLUCINATION_VERIFICATION_TIMEOUT", "30"))
+
+        _response_text_for_gate = final_state.get("response", "") or ""
+        _block_this_response = intent in BLOCKING_VERIFICATION_INTENTS or (
+            intent in BORROWER_FACING_INTENTS
+            and bool(_QUOTED_FIGURE_RE.search(_response_text_for_gate))
+        )
+        if _block_this_response and intent not in BLOCKING_VERIFICATION_INTENTS:
+            logger.info(
+                f"[HALLUCINATION] Escalating borrower-facing intent '{intent}' to "
+                f"blocking verification — response quotes a rate/dollar figure"
+            )
+
         if verification_enabled and final_state.get("response") and final_state.get("gathered_data"):
             try:
                 async def _run_verification_task():
@@ -726,8 +799,9 @@ async def run_orchestrator(
                         db_session=db_session
                     )
 
-                if intent in BLOCKING_VERIFICATION_INTENTS:
-                    # Blocking mode for compliance-sensitive intents
+                if _block_this_response:
+                    # Blocking mode for compliance-sensitive and borrower-facing
+                    # numeric intents
                     try:
                         verification = await asyncio.wait_for(
                             _run_verification_task(), timeout=10.0

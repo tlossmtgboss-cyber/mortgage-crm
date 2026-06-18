@@ -49,7 +49,9 @@ pwd_context = _BcryptCompat()
 ORG_NAME = "Summit Home Loans"
 ORG_SLUG = "summit-home-loans"
 DEMO_EMAIL = "demo@perenniaai.com"
-DEMO_PASSWORD = "Password1!"
+# Demo password is read from the environment — never hardcoded. The seed
+# script refuses to run unless DEMO_USER_PASSWORD is set (see main()).
+DEMO_PASSWORD = os.getenv("DEMO_USER_PASSWORD", "")
 NOW = datetime.now(timezone.utc)
 TODAY = NOW.date()
 
@@ -6614,6 +6616,16 @@ def seed_notifications(conn, org_id, user_ids):
 
 
 def main():
+    # SECURITY: never seed demo accounts (with their fixed password) in production,
+    # and refuse to run without an explicitly configured demo password.
+    environment = os.environ.get("ENVIRONMENT", os.environ.get("RAILWAY_ENVIRONMENT", "development"))
+    if environment.lower() in ("production", "prod"):
+        print("ERROR: Refusing to run demo seed in production (ENVIRONMENT=production).")
+        sys.exit(1)
+    if not DEMO_PASSWORD:
+        print("ERROR: DEMO_USER_PASSWORD environment variable is required to seed the demo account.")
+        sys.exit(1)
+
     print("🔌 Connecting...")
     engine = get_engine()
 

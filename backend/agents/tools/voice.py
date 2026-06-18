@@ -8,7 +8,7 @@ Tools for the Voice OS Agent handling outbound calls, voicemail, and call analyt
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,54 @@ def _check_call_consent(phone_number: str, contact_id: Optional[str] = None) -> 
     return None
 
 
+def check_federal_dnc(phone: str) -> Tuple[bool, Optional[str]]:
+    """Check a phone number against the Federal Do Not Call Registry.
+
+    EXTENSION POINT — NOT YET WIRED TO THE REAL FEDERAL DNC DATA.
+    The National DNC Registry (telemarketing.donotcall.gov / the FTC
+    downloadable area-code files) requires a registered Subscription Account
+    Number (SAN) and a licensed data feed. Until that feed is configured,
+    this function performs NO real lookup.
+
+    Behavior is controlled by FEDERAL_DNC_ENFORCEMENT:
+      - "fail_closed" (default in production): treat as ON the registry and
+        BLOCK the call, because we cannot prove the number is clear.
+      - "advisory": return clear-but-flagged so the caller can log a warning
+        without blocking (useful in dev / before the feed is live).
+
+    THIS MUST BE WIRED TO THE REAL FEDERAL DNC API/DATA FEED BEFORE
+    PRODUCTION OUTBOUND CALLING. Do not relax the fail-closed default
+    without legal sign-off — placing a call to a federally-registered number
+    without an established business relationship or written consent is a TCPA
+    violation carrying per-call statutory penalties.
+
+    Returns:
+        Tuple of (is_on_federal_dnc, reason). is_on_federal_dnc=True blocks
+        the call. reason is a human-readable explanation when blocked/flagged.
+    """
+    mode = os.getenv("FEDERAL_DNC_ENFORCEMENT", "").strip().lower()
+    if not mode:
+        # Default: fail-closed in production, advisory elsewhere.
+        env = (os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("ENVIRONMENT", "")).lower()
+        mode = "fail_closed" if env in ("production", "prod") or os.getenv("RAILWAY_ENVIRONMENT") else "advisory"
+
+    if mode == "fail_closed":
+        return True, (
+            "Federal DNC Registry check is not configured. Blocking outbound call "
+            "(fail-closed) — wire check_federal_dnc() to the FTC DNC data feed "
+            "before enabling production outbound calling."
+        )
+
+    # Advisory mode: do not block, but signal that no real check ran.
+    logger.warning(
+        "Federal DNC Registry check is not configured (advisory mode) — "
+        "outbound call to %s NOT screened against the federal registry. "
+        "Wire check_federal_dnc() before production.",
+        phone,
+    )
+    return False, None
+
+
 def _validate_outbound(phone: str, channel: str = "call") -> Optional[ToolResult]:
     """Run compliance checks before outbound contact.
 
@@ -54,13 +102,19 @@ def _validate_outbound(phone: str, channel: str = "call") -> Optional[ToolResult
 
     Returns ToolResult error or None if clear.
     """
-    # Check DNC
+    # Check internal DNC list
     dnc = execute_single(
         "SELECT id, reason FROM contact_dnc_status WHERE phone_number = :phone",
         {"phone": phone}
     )
     if dnc:
         return ToolResult.error(f"BLOCKED: Phone {phone} is on DNC list. Reason: {dnc.get('reason', 'N/A')}")
+
+    # Check Federal DNC Registry (scaffold — see check_federal_dnc docstring).
+    # Fails closed by default so we never place a call we can't prove is legal.
+    on_federal_dnc, federal_reason = check_federal_dnc(phone)
+    if on_federal_dnc:
+        return ToolResult.error(f"BLOCKED: {federal_reason}")
 
     # Check calling window in RECIPIENT's timezone (8am-9pm local)
     try:
@@ -79,16 +133,20 @@ def _validate_outbound(phone: str, channel: str = "call") -> Optional[ToolResult
                 f"(8 AM - 9 PM). Want me to schedule it for tomorrow morning?"
             )
     except Exception as e:
-        # Fallback: block if we can't determine timezone (fail-closed)
-        logger.warning(f"Timezone resolution failed for {phone}, using UTC check: {e}")
-        from datetime import timezone as _tz
-        now_utc = datetime.now(_tz.utc)
-        eastern_hour = (now_utc.hour - 5) % 24  # Approximate, ignoring DST
-        if eastern_hour < 8 or eastern_hour >= 21:
-            return ToolResult.error(
-                f"BLOCKED: Outside TCPA {channel} window (8 AM - 9 PM Eastern). "
-                f"Want me to schedule it for tomorrow morning?"
-            )
+        # FAIL CLOSED: if we cannot resolve the recipient's timezone we cannot
+        # prove the call is inside the TCPA 8 AM - 9 PM local safe harbor, so
+        # we block rather than approximate. A UTC/Eastern guess could place a
+        # call at, e.g., 6 AM Pacific — a TCPA violation.
+        logger.warning(
+            f"Timezone resolution failed for {phone} — blocking {channel} "
+            f"(fail-closed, cannot verify TCPA quiet hours): {e}"
+        )
+        return ToolResult.error(
+            f"BLOCKED: I couldn't determine the recipient's timezone, so I can't "
+            f"confirm this is within the TCPA {channel} window (8 AM - 9 PM local). "
+            f"I won't risk calling outside the legal window. Want me to schedule it "
+            f"for tomorrow morning instead?"
+        )
 
     return None
 
