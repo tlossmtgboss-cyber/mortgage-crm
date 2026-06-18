@@ -703,6 +703,7 @@ class TestCSRFWebhookSecurity:
     def test_conflict_detection_prevents_double_booking(self):
         """_check_appointment_conflict should raise 409 when a conflict exists."""
         from routes.scheduler_appointment_routes import _check_appointment_conflict
+        import asyncio
         mock_db = MagicMock()
         mock_conflict = MockAppointment(id=42)
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = mock_conflict
@@ -714,13 +715,13 @@ class TestCSRFWebhookSecurity:
             sar._models = {'Appointment': MockAppointment}
 
             with pytest.raises(HTTPException) as exc_info:
-                _check_appointment_conflict(
+                asyncio.run(_check_appointment_conflict(
                     db=mock_db,
                     assigned_user_id=1,
                     start_time=datetime.now(timezone.utc),
                     end_time=datetime.now(timezone.utc) + timedelta(minutes=30),
                     org_id=1,
-                )
+                ))
             assert exc_info.value.status_code == 409
         finally:
             if models_backup is not None:
@@ -730,6 +731,7 @@ class TestCSRFWebhookSecurity:
         """_check_appointment_conflict should raise 409 on OperationalError (locked row)."""
         from routes.scheduler_appointment_routes import _check_appointment_conflict
         from sqlalchemy.exc import OperationalError
+        import asyncio
         mock_db = MagicMock()
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.side_effect = (
             OperationalError("statement", {}, Exception("could not obtain lock"))
@@ -742,13 +744,13 @@ class TestCSRFWebhookSecurity:
             sar._models = {'Appointment': MockAppointment}
 
             with pytest.raises(HTTPException) as exc_info:
-                _check_appointment_conflict(
+                asyncio.run(_check_appointment_conflict(
                     db=mock_db,
                     assigned_user_id=1,
                     start_time=datetime.now(timezone.utc),
                     end_time=datetime.now(timezone.utc) + timedelta(minutes=30),
                     org_id=1,
-                )
+                ))
             assert exc_info.value.status_code == 409
             assert "being booked" in exc_info.value.detail.lower()
         finally:
