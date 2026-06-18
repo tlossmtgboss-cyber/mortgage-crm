@@ -1,0 +1,368 @@
+.kb-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f1f5f9;
+  padding: 28px 32px;
+  gap: 28px;
+}
+
+.kb-section {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.kb-section-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.kb-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px;
+}
+
+.kb-subtitle {
+  font-size: 13.5px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* ── Upload zone ── */
+.kb-upload-area {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.kb-drop-zone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 32px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: #f8fafc;
+}
+
+.kb-drop-zone:hover,
+.kb-drop-zone.drag-over {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.kb-drop-icon {
+  font-size: 36px;
+  margin-bottom: 10px;
+}
+
+.kb-drop-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.kb-drop-sub {
+  font-size: 12.5px;
+  color: #94a3b8;
+}
+
+.kb-drop-zone input[type='file'] {
+  display: none;
+}
+
+/* Staged file */
+.kb-staged-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: #374151;
+}
+
+.kb-staged-filename {
+  flex: 1;
+  font-weight: 600;
+}
+
+.kb-staged-size {
+  color: #64748b;
+  font-size: 12.5px;
+}
+
+.kb-upload-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* Progress bar */
+.kb-progress-bar-wrap {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.kb-progress-bar {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 3px;
+  transition: width 0.2s;
+}
+
+/* ── Documents table ── */
+.kb-table-wrap {
+  overflow-x: auto;
+}
+
+.kb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.kb-table th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.kb-table td {
+  padding: 12px 16px;
+  color: #374151;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.kb-table tr:last-child td {
+  border-bottom: none;
+}
+
+.kb-table tr:hover td {
+  background: #f8fafc;
+}
+
+/* Status badges */
+.kb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.kb-badge-processing {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.kb-badge-ready {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.kb-badge-failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.kb-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #92400e;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: kb-spin 0.7s linear infinite;
+}
+
+@keyframes kb-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Action buttons */
+.kb-action-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid;
+  transition: background 0.12s;
+}
+
+.kb-action-btn-delete {
+  color: #dc2626;
+  border-color: #fca5a5;
+  background: #fff;
+}
+
+.kb-action-btn-delete:hover {
+  background: #fee2e2;
+}
+
+.kb-action-btn-reprocess {
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  background: #fff;
+  margin-left: 6px;
+}
+
+.kb-action-btn-reprocess:hover {
+  background: #eff6ff;
+}
+
+.kb-empty {
+  padding: 32px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13.5px;
+}
+
+/* ── Buttons ── */
+.kb-btn-primary {
+  padding: 9px 18px;
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.kb-btn-primary:hover:not(:disabled) {
+  background: #1e40af;
+}
+
+.kb-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kb-btn-secondary {
+  padding: 9px 18px;
+  background: #f8fafc;
+  color: #374151;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.kb-btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+/* ── Test AI section ── */
+.kb-test-section {
+  padding: 20px 24px;
+}
+
+.kb-test-label {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 14px;
+  font-style: italic;
+}
+
+.kb-chat-messages {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  height: 220px;
+  overflow-y: auto;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.kb-chat-empty {
+  color: #94a3b8;
+  font-size: 13px;
+  text-align: center;
+  margin: auto;
+}
+
+.kb-msg {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.kb-msg-user {
+  align-self: flex-end;
+  background: #1d4ed8;
+  color: #fff;
+  border-bottom-right-radius: 3px;
+}
+
+.kb-msg-ai {
+  align-self: flex-start;
+  background: #fff;
+  color: #374151;
+  border: 1px solid #e2e8f0;
+  border-bottom-left-radius: 3px;
+}
+
+.kb-msg-typing {
+  align-self: flex-start;
+  background: #e2e8f0;
+  color: #64748b;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 18px;
+  letter-spacing: 3px;
+  animation: kb-blink 1.2s infinite;
+}
+
+@keyframes kb-blink {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.kb-chat-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.kb-chat-input {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13.5px;
+  outline: none;
+  font-family: inherit;
+}
+
+.kb-chat-input:focus {
+  border-color: #3b82f6;
+}

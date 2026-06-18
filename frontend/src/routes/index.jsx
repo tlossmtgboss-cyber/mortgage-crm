@@ -324,6 +324,11 @@ const RecruitDashboard = lazyRetry(() => import('../pages/RecruitPlatform/Dashbo
 const RecruitJobs = lazyRetry(() => import('../pages/RecruitPlatform/Jobs'));
 const LicenseManager = lazyRetry(() => import('../pages/RecruitPlatform/LicenseManager'));
 const RecruitLayout = lazyRetry(() => import('../pages/RecruitPlatform/RecruitLayout'));
+const RecruitWebsiteBuilder = lazyRetry(() => import('../pages/RecruitPlatform/WebsiteBuilder'));
+const RecruitKnowledgeBase = lazyRetry(() => import('../pages/RecruitPlatform/KnowledgeBase'));
+const RecruitChatWidget = lazyRetry(() => import('../pages/RecruitPlatform/ChatWidget'));
+const RecruitEmbedSettings = lazyRetry(() => import('../pages/RecruitPlatform/EmbedSettings'));
+const RecruitJobsPublic = lazyRetry(() => import('../pages/RecruitPlatform/JobsPublic'));
 const AgentGym = lazyRetry(() => import('../pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('../pages/AgentGovernanceSettings'));
 const MemoryStaging = lazyRetry(() => import('../pages/MemoryStaging'));
@@ -907,7 +912,14 @@ export function getRoutes(layoutProps, options = {}) {
       <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><RecruitDashboard /></Suspense>} />
       <Route path="jobs" element={<Suspense fallback={<PageLoader />}><RecruitJobs /></Suspense>} />
       <Route path="license-manager" element={<Suspense fallback={<PageLoader />}><LicenseManager /></Suspense>} />
+      <Route path="website-builder" element={<Suspense fallback={<PageLoader />}><RecruitWebsiteBuilder /></Suspense>} />
+      <Route path="knowledge-base" element={<Suspense fallback={<PageLoader />}><RecruitKnowledgeBase /></Suspense>} />
+      <Route path="chat-widget" element={<Suspense fallback={<PageLoader />}><RecruitChatWidget /></Suspense>} />
+      <Route path="embed-settings" element={<Suspense fallback={<PageLoader />}><RecruitEmbedSettings /></Suspense>} />
     </Route>,
+    <Route key="/recruit/jobs/public/:orgSlug" path="/recruit/jobs/public/:orgSlug" element={
+      <Suspense fallback={<PageLoader />}><RecruitJobsPublic /></Suspense>
+    } />,
     <Route key="/recruit/login" path="/recruit/login" element={
       <RecruitPlatformProvider>
         <Suspense fallback={<PageLoader />}><RecruitLogin /></Suspense>

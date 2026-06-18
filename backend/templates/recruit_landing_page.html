@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<base href="{{BASE_HREF}}">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{PAGE_TITLE}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cmg-navy: #1B2A4A;
+    --cmg-navy-mid: #223358;
+    --cmg-navy-light: #2D4470;
+    --cmg-red: {{PRIMARY_COLOR}};
+    --cmg-red-dark: {{PRIMARY_COLOR_DARK}};
+    --cmg-red-pale: {{PRIMARY_COLOR_PALE}};
+    --white: #FFFFFF;
+    --off-white: #F4F5F7;
+    --gray-50: #F9FAFB;
+    --gray-100: #ECEEF2;
+    --gray-200: #D5D9E3;
+    --gray-400: #8892A4;
+    --gray-600: #4A5568;
+    --gray-800: #1A202C;
+    --green: #2D7D3A;
+    --green-pale: #E4F2E7;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 20px;
+    --shadow-sm: 0 1px 4px rgba(27,42,74,0.08);
+    --shadow-md: 0 4px 16px rgba(27,42,74,0.10);
+    --shadow-lg: 0 8px 32px rgba(27,42,74,0.14);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Open Sans', sans-serif; background: var(--off-white); color: var(--gray-800); line-height: 1.6; overflow-x: hidden; }
+  h1, h2, h3, h4, h5 { font-family: 'Montserrat', sans-serif; }
+  nav { background: white; position: sticky; top: 0; z-index: 100; border-bottom: 1px solid var(--gray-200); box-shadow: var(--shadow-sm); }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; padding: 0 48px; height: 72px; max-width: 1400px; margin: 0 auto; }
+  .nav-logo img { height: 48px; display: block; }
+  .nav-tabs { display: flex; gap: 2px; align-items: center; }
+  .nav-tab { background: none; border: none; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--gray-600); padding: 8px 14px; border-radius: var(--radius-sm); cursor: pointer; transition: all 0.18s; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .nav-tab:hover { color: var(--cmg-navy); background: var(--gray-50); }
+  .nav-tab.active { color: var(--cmg-navy); border-bottom: 3px solid var(--cmg-red); border-radius: 0; padding-bottom: 5px; }
+  .step-badge { width: 20px; height: 20px; background: var(--gray-100); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: var(--gray-400); flex-shrink: 0; }
+  .nav-tab.active .step-badge { background: var(--cmg-red); color: white; }
+  .nav-cta { background: var(--cmg-red); color: white; border: none; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; padding: 10px 22px; border-radius: var(--radius-sm); cursor: pointer; transition: background 0.2s; white-space: nowrap; }
+  .nav-cta:hover { background: var(--cmg-red-dark); }
+  .page { display: none; }
+  .page.active { display: block; }
+  .hero { background: var(--cmg-navy); position: relative; overflow: hidden; }
+  .hero-content { max-width: 1320px; margin: 0 auto; padding: 80px 48px 0; display: grid; grid-template-columns: 1fr 420px; gap: 64px; align-items: end; }
+  .hero-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.7); margin-bottom: 20px; }
+  .hero-eyebrow-line { display: inline-block; width: 28px; height: 2px; background: var(--cmg-red); flex-shrink: 0; }
+  .hero h1 { font-size: 58px; font-weight: 800; line-height: 1.05; color: white; margin-bottom: 24px; letter-spacing: -1.5px; }
+  .hero h1 span.red { color: var(--cmg-red); }
+  .hero h1 span.italic { font-style: italic; }
+  .hero-sub { color: rgba(255,255,255,0.62); font-size: 17px; line-height: 1.7; margin-bottom: 36px; max-width: 540px; }
+  .hero-checks { display: flex; flex-direction: column; gap: 10px; margin-bottom: 40px; }
+  .hero-check { display: flex; align-items: center; gap: 10px; font-size: 14px; color: rgba(255,255,255,0.8); font-family: 'Montserrat', sans-serif; font-weight: 500; }
+  .check-icon { width: 20px; height: 20px; background: var(--cmg-red); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; color: white; flex-shrink: 0; }
+  .hero-btns { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .btn-red { background: var(--cmg-red); color: white; border: none; font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; padding: 14px 28px; border-radius: var(--radius-sm); cursor: pointer; transition: background 0.2s; text-decoration: none; display: inline-block; }
+  .btn-red:hover { background: var(--cmg-red-dark); }
+  .btn-outline { background: transparent; color: rgba(255,255,255,0.8); border: 1.5px solid rgba(255,255,255,0.3); font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 600; padding: 13px 24px; border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+  .btn-outline:hover { border-color: rgba(255,255,255,0.65); color: white; }
+  .earnings-card { background: white; border-radius: var(--radius-lg); padding: 32px; box-shadow: var(--shadow-lg); position: relative; }
+  .earnings-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--cmg-red); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+  .earnings-label { font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--gray-400); margin-bottom: 6px; }
+  .earnings-figure { font-family: 'Montserrat', sans-serif; font-size: 48px; font-weight: 800; color: var(--cmg-navy); line-height: 1; margin-bottom: 4px; }
+  .earnings-note { font-size: 12px; color: var(--gray-400); margin-bottom: 24px; }
+  .earnings-rows { border-top: 1px solid var(--gray-100); padding-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .earnings-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--gray-50); border-radius: var(--radius-sm); border-left: 3px solid var(--cmg-red); }
+  .earnings-row-label { font-size: 12px; color: var(--gray-600); font-family: 'Montserrat', sans-serif; font-weight: 500; }
+  .earnings-row-val { font-size: 14px; font-weight: 700; font-family: 'Montserrat', sans-serif; color: var(--green); }
+  .hero-stats { background: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.08); margin-top: 60px; }
+  .hero-stats-inner { max-width: 1320px; margin: 0 auto; padding: 20px 48px; display: flex; gap: 0; }
+  .hero-stat { flex: 1; display: flex; flex-direction: column; padding-right: 40px; }
+  .hero-stat + .hero-stat { padding-left: 40px; border-left: 1px solid rgba(255,255,255,0.1); }
+  .hero-stat-num { font-family: 'Montserrat', sans-serif; font-size: 26px; font-weight: 800; color: white; line-height: 1; margin-bottom: 4px; }
+  .hero-stat-label { font-size: 12px; color: rgba(255,255,255,0.45); font-weight: 500; }
+  .section { padding: 80px 48px; max-width: 1320px; margin: 0 auto; }
+  .section-eyebrow { display: flex; align-items: center; gap: 10px; font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--cmg-red); margin-bottom: 14px; }
+  .section-eyebrow::before { content: ''; display: inline-block; width: 24px; height: 2px; background: var(--cmg-red); }
+  .section-title { font-size: 36px; font-weight: 800; color: var(--cmg-navy); line-height: 1.15; margin-bottom: 14px; letter-spacing: -0.5px; }
+  .section-sub { font-size: 16px; color: var(--gray-600); line-height: 1.7; max-width: 600px; }
+  .path-track { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 48px; position: relative; }
+  .path-connector { position: absolute; top: 28px; left: calc(12.5% + 14px); right: calc(12.5% + 14px); height: 3px; background: linear-gradient(to right, var(--cmg-red), var(--cmg-navy)); z-index: 0; }
+  .path-step { text-align: center; padding: 0 16px; position: relative; z-index: 1; }
+  .path-node { width: 56px; height: 56px; background: var(--cmg-navy); border: 3px solid var(--cmg-red); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 22px; }
+  .path-timeline { font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--cmg-red); margin-bottom: 6px; }
+  .path-step h3 { font-size: 15px; font-weight: 700; color: var(--cmg-navy); margin-bottom: 6px; }
+  .path-step p { font-size: 12px; color: var(--gray-600); line-height: 1.55; }
+  .path-salary { font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 800; color: var(--green); margin-top: 8px; }
+  .training-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 48px; }
+  .training-card { background: white; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 28px; border-top: 3px solid var(--cmg-navy); box-shadow: var(--shadow-sm); transition: box-shadow 0.2s; }
+  .training-card:hover { box-shadow: var(--shadow-md); }
+  .training-week { font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--cmg-red); margin-bottom: 8px; }
+  .training-card h3 { font-size: 17px; color: var(--cmg-navy); margin-bottom: 10px; }
+  .training-card p { font-size: 13px; color: var(--gray-600); line-height: 1.6; margin-bottom: 16px; }
+  .training-list { display: flex; flex-direction: column; gap: 7px; }
+  .training-list-item { display: flex; gap: 8px; font-size: 13px; color: var(--gray-600); line-height: 1.4; }
+  .training-list-item::before { content: '✓'; color: var(--cmg-red); font-weight: 700; font-size: 11px; margin-top: 1px; flex-shrink: 0; }
+  .testimonials-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 48px; }
+  .tcard { background: white; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 28px; box-shadow: var(--shadow-sm); }
+  .tcard-stars { color: var(--cmg-red); font-size: 14px; margin-bottom: 14px; }
+  .tcard-quote { font-size: 14px; line-height: 1.7; color: var(--gray-800); margin-bottom: 20px; font-style: italic; }
+  .tcard-author { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--gray-100); padding-top: 16px; }
+  .tcard-avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700; color: white; flex-shrink: 0; }
+  .tcard-name { font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700; color: var(--cmg-navy); }
+  .tcard-detail { font-size: 12px; color: var(--gray-400); }
+  .noexp { background: var(--cmg-navy); border-radius: var(--radius-xl); padding: 64px; position: relative; overflow: hidden; }
+  .noexp::after { content: ''; position: absolute; right: -60px; bottom: -60px; width: 300px; height: 300px; border: 40px solid rgba(106,170,38,0.15); border-radius: 50%; pointer-events: none; }
+  .noexp h2 { font-size: 38px; color: white; text-align: center; margin-bottom: 12px; line-height: 1.2; }
+  .noexp h2 span { color: var(--cmg-red); }
+  .noexp > p { color: rgba(255,255,255,0.6); font-size: 17px; text-align: center; max-width: 580px; margin: 0 auto 40px; line-height: 1.65; }
+  .noexp-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .noexp-card { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: var(--radius-lg); padding: 22px; }
+  .noexp-card-icon { font-size: 28px; margin-bottom: 10px; }
+  .noexp-card h4 { color: white; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .noexp-card p { color: rgba(255,255,255,0.5); font-size: 12px; line-height: 1.5; }
+  .video-block { display: grid; grid-template-columns: 1fr 1fr; gap: 0; background: white; border-radius: var(--radius-xl); overflow: hidden; border: 1px solid var(--gray-200); box-shadow: var(--shadow-md); margin-top: 48px; }
+  .video-thumb { background: var(--cmg-navy); min-height: 340px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; cursor: pointer; position: relative; }
+  .play-circle { width: 68px; height: 68px; background: var(--cmg-red); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; padding-left: 4px; transition: transform 0.2s, background 0.2s; }
+  .video-thumb:hover .play-circle { transform: scale(1.07); background: var(--cmg-red-dark); }
+  .video-thumb-label { color: rgba(255,255,255,0.55); font-size: 13px; text-align: center; }
+  .video-body { padding: 44px 40px; display: flex; flex-direction: column; justify-content: center; }
+  .video-body h3 { font-size: 24px; color: var(--cmg-navy); margin-bottom: 14px; line-height: 1.3; }
+  .video-body p { font-size: 14px; color: var(--gray-600); line-height: 1.7; margin-bottom: 12px; }
+  .leader-row { display: flex; align-items: center; gap: 14px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--gray-100); }
+  .leader-ava { width: 48px; height: 48px; background: var(--cmg-navy); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 16px; color: white; flex-shrink: 0; }
+  .leader-name { font-family: 'Montserrat', sans-serif; font-size: 14px; font-weight: 700; color: var(--cmg-navy); }
+  .leader-title { font-size: 12px; color: var(--gray-400); }
+  .full-cta { background: var(--cmg-navy); text-align: center; padding: 64px 48px; }
+  .full-cta h2 { font-size: 36px; color: white; margin-bottom: 14px; line-height: 1.2; }
+  .full-cta p { color: rgba(255,255,255,0.6); font-size: 17px; max-width: 520px; margin: 0 auto 32px; line-height: 1.65; }
+  .why-hero { background: var(--cmg-navy); padding: 72px 48px; text-align: center; }
+  .why-hero h1 { font-size: 48px; font-weight: 800; color: white; margin-bottom: 14px; letter-spacing: -1px; line-height: 1.1; }
+  .why-hero h1 span { color: var(--cmg-red); }
+  .why-hero p { color: rgba(255,255,255,0.6); font-size: 17px; max-width: 540px; margin: 0 auto; line-height: 1.65; }
+  .pillars-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 48px; }
+  .pillar { background: white; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); padding: 32px 28px; box-shadow: var(--shadow-sm); transition: all 0.2s; }
+  .pillar:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+  .pillar-icon { width: 52px; height: 52px; background: var(--cmg-navy); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 18px; }
+  .pillar h3 { font-size: 18px; color: var(--cmg-navy); margin-bottom: 10px; }
+  .pillar > p { font-size: 14px; color: var(--gray-600); line-height: 1.65; margin-bottom: 18px; }
+  .pillar-list { display: flex; flex-direction: column; gap: 7px; }
+  .pillar-item { display: flex; gap: 8px; font-size: 13px; color: var(--gray-600); line-height: 1.4; }
+  .pillar-dot { width: 5px; height: 5px; background: var(--cmg-red); border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .benefits-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 48px; }
+  .benefit { display: flex; gap: 16px; align-items: flex-start; padding: 20px; background: white; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+  .benefit-icon { width: 44px; height: 44px; background: var(--off-white); border: 1px solid var(--gray-200); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+  .benefit h4 { font-size: 14px; color: var(--cmg-navy); margin-bottom: 4px; }
+  .benefit p { font-size: 13px; color: var(--gray-600); line-height: 1.55; }
+  .culture-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 48px; }
+  .culture-card { background: var(--cmg-navy); border-radius: var(--radius-lg); padding: 24px 20px; }
+  .culture-card-icon { font-size: 28px; margin-bottom: 12px; }
+  .culture-card h4 { color: white; font-size: 15px; margin-bottom: 8px; }
+  .culture-card p { color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.5; }
+  .apply-wrap { display: grid; grid-template-columns: 420px 1fr; min-height: calc(100vh - 72px); }
+  .apply-sidebar { background: var(--cmg-navy); padding: 60px 48px; position: sticky; top: 72px; height: calc(100vh - 72px); overflow-y: auto; }
+  .apply-sidebar h2 { font-size: 30px; color: white; line-height: 1.25; margin-bottom: 14px; }
+  .apply-sidebar h2 span { color: var(--cmg-red); }
+  .apply-sidebar > p { color: rgba(255,255,255,0.6); font-size: 15px; line-height: 1.7; margin-bottom: 36px; }
+  .apply-points { display: flex; flex-direction: column; gap: 18px; margin-bottom: 36px; }
+  .apply-point { display: flex; gap: 14px; align-items: flex-start; }
+  .apply-point-icon { width: 38px; height: 38px; background: rgba(106,170,38,0.2); border: 1px solid rgba(106,170,38,0.4); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .apply-point h4 { color: white; font-size: 13px; margin-bottom: 3px; }
+  .apply-point p { color: rgba(255,255,255,0.5); font-size: 12px; line-height: 1.5; margin: 0; }
+  .bonus-banner { padding: 18px; background: rgba(106,170,38,0.15); border: 1px solid rgba(106,170,38,0.3); border-radius: var(--radius-md); margin-top: 12px; }
+  .bonus-banner-title { color: #B6E07A; font-size: 12px; font-weight: 700; margin-bottom: 4px; }
+  .bonus-banner-body { color: rgba(255,255,255,0.55); font-size: 12px; line-height: 1.5; }
+  .apply-main { padding: 60px; background: var(--off-white); }
+  .apply-main h2 { font-size: 26px; color: var(--cmg-navy); margin-bottom: 6px; }
+  .apply-main-sub { color: var(--gray-400); font-size: 14px; margin-bottom: 32px; }
+  .form-group { margin-bottom: 18px; }
+  .form-label { display: block; font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--cmg-navy); margin-bottom: 6px; }
+  .form-label .req { color: var(--cmg-red); margin-left: 2px; }
+  .form-input { width: 100%; padding: 11px 14px; border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); font-family: 'Open Sans', sans-serif; font-size: 14px; color: var(--gray-800); background: white; transition: border-color 0.18s; outline: none; -webkit-appearance: none; }
+  .form-input:focus { border-color: var(--cmg-navy); }
+  .form-input::placeholder { color: var(--gray-400); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .upload-zone { border: 2px dashed var(--gray-200); border-radius: var(--radius-md); padding: 28px; text-align: center; cursor: pointer; background: white; transition: all 0.18s; }
+  .upload-zone:hover { border-color: var(--cmg-navy); background: var(--gray-50); }
+  .upload-zone-icon { font-size: 26px; margin-bottom: 8px; }
+  .upload-zone-title { font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700; color: var(--cmg-navy); margin-bottom: 4px; }
+  .upload-zone-sub { font-size: 12px; color: var(--gray-400); }
+  .form-submit-btn { width: 100%; background: var(--cmg-red); color: white; border: none; font-family: 'Montserrat', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 16px; border-radius: var(--radius-sm); cursor: pointer; margin-top: 22px; transition: background 0.2s; }
+  .form-submit-btn:hover { background: var(--cmg-red-dark); }
+  .form-disclaimer { text-align: center; font-size: 11px; color: var(--gray-400); margin-top: 12px; line-height: 1.6; }
+  .cal-widget { max-width: 500px; background: white; border: 1px solid var(--gray-200); border-radius: var(--radius-xl); overflow: hidden; box-shadow: var(--shadow-md); }
+  .cal-top { background: var(--cmg-navy); padding: 20px 24px; display: flex; align-items: center; gap: 14px; }
+  .cal-top-ava { width: 44px; height: 44px; background: var(--cmg-red); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 16px; color: white; flex-shrink: 0; }
+  .cal-top-title { color: white; font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+  .cal-top-sub { color: rgba(255,255,255,0.55); font-size: 12px; }
+  .cal-body { padding: 24px; }
+  .cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .cal-nav-btn { background: var(--gray-100); border: none; border-radius: var(--radius-sm); width: 32px; height: 32px; cursor: pointer; font-size: 14px; transition: background 0.15s; }
+  .cal-nav-btn:hover { background: var(--gray-200); }
+  .cal-month-label { font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 700; color: var(--cmg-navy); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-bottom: 20px; }
+  .cal-dh { text-align: center; font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--gray-400); padding: 4px 0; }
+  .cal-d { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.12s; }
+  .cal-d.avail { color: var(--cmg-navy); }
+  .cal-d.avail:hover { background: var(--gray-100); }
+  .cal-d.sel { background: var(--cmg-navy); color: white; font-weight: 700; }
+  .cal-d.na { color: var(--gray-200); cursor: default; }
+  .cal-d.today { background: var(--cmg-red); color: white; font-weight: 700; }
+  .cal-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+  .cal-slot { padding: 9px; text-align: center; border: 1.5px solid var(--gray-200); border-radius: var(--radius-sm); font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 600; color: var(--cmg-navy); cursor: pointer; transition: all 0.12s; }
+  .cal-slot:hover { border-color: var(--cmg-red); color: var(--cmg-red); background: var(--cmg-red-pale); }
+  .cal-slot.sel { background: var(--cmg-navy); border-color: var(--cmg-navy); color: white; }
+  .apply-steps-indicator { display: flex; align-items: center; margin-bottom: 32px; gap: 0; }
+  .asi-step { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .asi-num { width: 28px; height: 28px; border-radius: 50%; background: var(--gray-200); color: var(--gray-400); font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+  .asi-label { font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 600; color: var(--gray-400); white-space: nowrap; transition: color 0.2s; }
+  .asi-active .asi-num { background: var(--cmg-red); color: white; }
+  .asi-active .asi-label { color: var(--cmg-navy); }
+  .asi-done .asi-num { background: var(--green); color: white; }
+  .asi-done .asi-label { color: var(--green); }
+  .asi-line { flex: 1; height: 2px; background: var(--gray-200); margin: 0 10px; transition: background 0.2s; min-width: 20px; }
+  .asi-line.done { background: var(--green); }
+  .apply-form-title { font-family: 'Montserrat', sans-serif; font-size: 24px; color: var(--cmg-navy); margin-bottom: 4px; font-weight: 800; }
+  .next-steps-box { background: white; border: 1px solid var(--gray-200); border-top: 4px solid var(--cmg-red); border-radius: var(--radius-lg); padding: 28px 32px; max-width: 420px; margin: 0 auto 32px; text-align: left; box-shadow: var(--shadow-sm); }
+  .next-steps-title { font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--cmg-red); margin-bottom: 14px; }
+  .next-steps-items { display: flex; flex-direction: column; gap: 10px; }
+  .next-steps-item { display: flex; gap: 12px; font-size: 14px; color: var(--gray-800); line-height: 1.45; }
+  .next-steps-item-num { width: 22px; height: 22px; background: var(--cmg-navy); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 700; color: white; flex-shrink: 0; margin-top: 1px; }
+  .faq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 48px; }
+  .faq-item { background: white; border: 1px solid var(--gray-200); border-top: 3px solid var(--cmg-red); border-radius: var(--radius-lg); padding: 24px 24px 22px; box-shadow: var(--shadow-sm); }
+  .faq-item h4 { font-size: 15px; color: var(--cmg-navy); margin-bottom: 10px; line-height: 1.3; }
+  .faq-item p { font-size: 13px; color: var(--gray-600); line-height: 1.65; }
+  .process-timeline { margin-top: 52px; display: flex; flex-direction: column; gap: 0; }
+  .process-step { display: grid; grid-template-columns: 64px 1fr; gap: 0 28px; }
+  .process-step-last .process-line { display: none; }
+  .process-left { display: flex; flex-direction: column; align-items: center; }
+  .process-node { width: 52px; height: 52px; background: var(--cmg-navy); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; position: relative; z-index: 1; box-shadow: 0 0 0 4px white, 0 0 0 6px var(--cmg-red); }
+  .process-node-final { background: var(--cmg-red); box-shadow: 0 0 0 4px white, 0 0 0 6px var(--cmg-red); }
+  .process-num { font-family: 'Montserrat', sans-serif; font-size: 18px; font-weight: 800; color: white; line-height: 1; }
+  .process-line { width: 2px; flex: 1; background: linear-gradient(to bottom, var(--cmg-red), var(--gray-200)); min-height: 40px; margin: 4px 0; }
+  .process-body { padding-bottom: 44px; }
+  .process-step-last .process-body { padding-bottom: 0; }
+  .process-timing { font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--cmg-red); margin-bottom: 6px; margin-top: 12px; }
+  .process-body h3 { font-size: 20px; color: var(--cmg-navy); margin-bottom: 10px; line-height: 1.2; }
+  .process-body > p { font-size: 15px; color: var(--gray-600); line-height: 1.7; max-width: 680px; }
+  .process-detail-row { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+  .process-detail-item { display: flex; align-items: center; gap: 6px; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 600; color: var(--cmg-navy); background: var(--gray-100); padding: 6px 12px; border-radius: 100px; }
+  .process-callout { display: flex; gap: 14px; align-items: flex-start; background: var(--cmg-red-pale); border: 1px solid rgba(106,170,38,0.3); border-left: 4px solid var(--cmg-red); border-radius: var(--radius-md); padding: 18px 20px; margin-top: 18px; max-width: 680px; }
+  .process-callout-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+  .process-callout-title { font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700; color: var(--cmg-navy); margin-bottom: 5px; }
+  .process-callout-desc { font-size: 13px; color: var(--gray-600); line-height: 1.6; }
+  .faq-category { margin-bottom: 52px; }
+  .faq-category:last-child { margin-bottom: 0; }
+  .faq-cat-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid var(--gray-200); }
+  .faq-cat-icon { width: 44px; height: 44px; background: var(--cmg-navy); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+  .faq-cat-title { font-size: 22px; color: var(--cmg-navy); font-weight: 800; margin: 0; }
+  .faq-accordion { display: flex; flex-direction: column; border: 1px solid var(--gray-200); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .faq-acc-item { border-bottom: 1px solid var(--gray-200); background: white; }
+  .faq-acc-item:last-child { border-bottom: none; }
+  .faq-acc-btn { width: 100%; background: none; border: none; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; cursor: pointer; text-align: left; font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 600; color: var(--cmg-navy); line-height: 1.4; transition: background 0.15s; }
+  .faq-acc-btn:hover { background: var(--gray-50); }
+  .faq-acc-btn.open { background: var(--cmg-red-pale); border-left: 4px solid var(--cmg-red); padding-left: 20px; }
+  .faq-chevron { font-size: 22px; color: var(--cmg-red); flex-shrink: 0; transition: transform 0.25s; line-height: 1; font-weight: 400; }
+  .faq-acc-btn.open .faq-chevron { transform: rotate(90deg); }
+  .faq-acc-body { display: none; padding: 0 24px 22px; border-left: 4px solid var(--cmg-red); background: var(--cmg-red-pale); }
+  .faq-acc-body.open { display: block; }
+  .faq-acc-body p { font-size: 14px; color: var(--gray-600); line-height: 1.75; margin: 0; }
+  footer { background: var(--cmg-navy); padding: 40px 48px; margin-top: 80px; }
+  .footer-inner { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+  .footer-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  .footer-links { display: flex; gap: 20px; align-items: center; }
+  .footer-links a { color: rgba(255,255,255,0.5); font-size: 11px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; text-decoration: none; transition: color 0.2s; }
+  .footer-links a:hover { color: rgba(255,255,255,0.85); }
+  .footer-legal { font-size: 10.5px; color: rgba(255,255,255,0.35); line-height: 1.7; }
+  @media (max-width: 960px) {
+    .nav-inner { padding: 0 20px; }
+    .nav-tabs { display: none; }
+    .hero-content { grid-template-columns: 1fr; padding: 48px 24px 0; }
+    .hero h1 { font-size: 38px; }
+    .hero-stats-inner { flex-wrap: wrap; padding: 20px 24px; gap: 20px; }
+    .section { padding: 48px 24px; }
+    .path-track { grid-template-columns: 1fr 1fr; gap: 32px; }
+    .path-connector { display: none; }
+    .training-grid, .testimonials-row, .pillars-grid { grid-template-columns: 1fr; }
+    .noexp { padding: 40px 24px; }
+    .noexp-grid, .culture-grid, .faq-grid { grid-template-columns: 1fr 1fr; }
+    .benefits-grid, .form-row { grid-template-columns: 1fr; }
+    .video-block, .apply-wrap { grid-template-columns: 1fr; }
+    .apply-sidebar { position: static; height: auto; padding: 48px 24px; }
+    .apply-main { padding: 40px 24px; }
+    .footer-top { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .footer-links { flex-wrap: wrap; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="#" onclick="showPage('p1'); return false;" style="display:flex;align-items:center;">
+      <span style="font-family:'Montserrat',sans-serif;font-size:20px;font-weight:800;color:var(--cmg-navy);">{{COMPANY_NAME}}</span>
+    </a>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showPage('p1')" id="tab-p1"><span class="step-badge">1</span>The Opportunity</button>
+      <button class="nav-tab" onclick="showPage('p2')" id="tab-p2"><span class="step-badge">2</span>Why Join Us</button>
+      <button class="nav-tab" onclick="showPage('p3')" id="tab-p3"><span class="step-badge">3</span>Hiring Process</button>
+      <button class="nav-tab" onclick="showPage('p5')" id="tab-p5"><span class="step-badge">?</span>FAQ</button>
+      <button class="nav-tab" onclick="showPage('p4')" id="tab-p4"><span class="step-badge">4</span>Apply Now</button>
+    </div>
+    <button class="nav-cta" onclick="showPage('p4')">Apply Now</button>
+  </div>
+</nav>
+
+<!-- PAGE 1: OPPORTUNITY -->
+<div id="p1" class="page active">
+  <div class="hero">
+    <div class="hero-content">
+      <div>
+        <div class="hero-eyebrow"><span class="hero-eyebrow-line"></span>Now Hiring · {{LOCATION_DISPLAY}}</div>
+        <h1>{{HERO_HEADLINE}}</h1>
+        <p class="hero-sub">{{HERO_SUBHEADLINE}}</p>
+        <div class="hero-checks">
+          <div class="hero-check"><span class="check-icon">✓</span>No mortgage license required to start — we pay for it</div>
+          <div class="hero-check"><span class="check-icon">✓</span>Warm, pre-qualified leads delivered to your pipeline daily</div>
+          <div class="hero-check"><span class="check-icon">✓</span>Fully paid 8-week training program with live coaching</div>
+          <div class="hero-check"><span class="check-icon">✓</span>{{SIGNING_BONUS}} signing bonus for {{SIGNING_BONUS_MONTH}} hires</div>
+        </div>
+        <div class="hero-btns">
+          <button class="btn-red" onclick="showPage('p4')">Apply in 3 Minutes →</button>
+          <button class="btn-outline" onclick="document.getElementById('vid-block').scrollIntoView({behavior:'smooth'})">▶ Watch Leadership Message</button>
+        </div>
+      </div>
+      <div class="earnings-card">
+        <div class="earnings-label">Year 1 On-Target Earnings</div>
+        <div class="earnings-figure">{{YEAR1_RANGE}}</div>
+        <div class="earnings-note">base salary + commission</div>
+        <div class="earnings-rows">
+          <div class="earnings-row"><span class="earnings-row-label">Year 2 — Top Performer</span><span class="earnings-row-val">{{YEAR2_TOP}}</span></div>
+          <div class="earnings-row"><span class="earnings-row-label">Senior Loan Officer</span><span class="earnings-row-val">{{SENIOR_LO}}</span></div>
+          <div class="earnings-row"><span class="earnings-row-label">Team Lead / Branch Mgr</span><span class="earnings-row-val">{{TEAM_LEAD}}</span></div>
+          <div class="earnings-row"><span class="earnings-row-label">Signing Bonus ({{SIGNING_BONUS_MONTH}} hire)</span><span class="earnings-row-val" style="color:var(--cmg-red)">{{SIGNING_BONUS}}</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stats-inner">
+        <div class="hero-stat"><div class="hero-stat-num">{{STAT_1_NUM}}</div><div class="hero-stat-label">{{STAT_1_LABEL}}</div></div>
+        <div class="hero-stat"><div class="hero-stat-num">{{STAT_2_NUM}}</div><div class="hero-stat-label">{{STAT_2_LABEL}}</div></div>
+        <div class="hero-stat"><div class="hero-stat-num">{{STAT_3_NUM}}</div><div class="hero-stat-label">{{STAT_3_LABEL}}</div></div>
+        <div class="hero-stat"><div class="hero-stat-num">{{STAT_4_NUM}}</div><div class="hero-stat-label">{{STAT_4_LABEL}}</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-eyebrow">Career Trajectory</div>
+    <h2 class="section-title">A real path forward — not just another job.</h2>
+    <p class="section-sub">Every loan officer starts at the same place. Where you go depends entirely on your drive and coachability.</p>
+    <div class="path-track">
+      <div class="path-connector"></div>
+      <div class="path-step"><div class="path-node">🎓</div><div class="path-timeline">Month 1–2</div><h3>Loan Officer Trainee</h3><p>Paid training. Learn products, systems, compliance, and market dynamics.</p><div class="path-salary">$45K base</div></div>
+      <div class="path-step"><div class="path-node">📞</div><div class="path-timeline">Month 3–12</div><h3>Junior Loan Officer</h3><p>Live warm leads. Building pipeline. Coached on every deal you work.</p><div class="path-salary">{{YEAR1_RANGE}} OTE</div></div>
+      <div class="path-step"><div class="path-node">🏆</div><div class="path-timeline">Year 2–3</div><h3>Senior Loan Officer</h3><p>Referral network. Complex purchase loans. Mentoring incoming hires.</p><div class="path-salary">{{SENIOR_LO}} OTE</div></div>
+      <div class="path-step"><div class="path-node">🚀</div><div class="path-timeline">Year 3+</div><h3>Team Lead / Branch Mgr</h3><p>Build and lead your own team. Override income. Equity in the platform.</p><div class="path-salary">{{TEAM_LEAD}}+ OTE</div></div>
+    </div>
+  </div>
+
+  <div style="background: var(--gray-50); padding: 80px 0;">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <div class="section-eyebrow">Training Program</div>
+      <h2 class="section-title">Eight weeks that change your career trajectory.</h2>
+      <p class="section-sub">Our Mortgage Academy is nationally recognized. You'll be licensed, certified, and pipeline-ready before you take your first live borrower call.</p>
+      <div class="training-grid">
+        <div class="training-card"><div class="training-week">Weeks 1–2</div><h3>Industry Foundations</h3><p>Understand mortgages end-to-end — loan types, rates, credit, and the local housing market.</p><div class="training-list"><div class="training-list-item">NMLS pre-licensing education (fully paid)</div><div class="training-list-item">Mortgage law and compliance overview</div><div class="training-list-item">Full product catalog deep dive</div><div class="training-list-item">Shadowing licensed LOs on live calls</div></div></div>
+        <div class="training-card"><div class="training-week">Weeks 3–4</div><h3>Sales Skills &amp; Scripts</h3><p>Build your frameworks. Practice until they feel natural. Our playbook is built from 10,000+ conversations.</p><div class="training-list"><div class="training-list-item">Call recording and live coaching feedback</div><div class="training-list-item">Complete objection handling library</div><div class="training-list-item">Pre-qualification scripting techniques</div><div class="training-list-item">Daily role-play with your cohort</div></div></div>
+        <div class="training-card"><div class="training-week">Weeks 5–6</div><h3>CRM &amp; Technology Mastery</h3><p>Learn every tool you'll use daily — so technology accelerates you instead of slowing you down.</p><div class="training-list"><div class="training-list-item">Encompass LOS certification</div><div class="training-list-item">Salesforce pipeline management</div><div class="training-list-item">Lead routing and prioritization</div><div class="training-list-item">Automated follow-up sequences</div></div></div>
+        <div class="training-card"><div class="training-week">Weeks 7–8</div><h3>Live Pipeline Launch</h3><p>You're licensed, trained, and ready. Work real leads with a senior coach in your corner.</p><div class="training-list"><div class="training-list-item">First live borrower conversations</div><div class="training-list-item">First closed loan milestone bonus</div><div class="training-list-item">90-day personalized coaching plan</div><div class="training-list-item">Full team integration and onboarding</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-eyebrow">Real People. Real Results.</div>
+    <h2 class="section-title">From zero mortgage experience to top producers.</h2>
+    <div class="testimonials-row">
+      <div class="tcard"><div class="tcard-stars">★★★★★</div><div class="tcard-quote">I waited tables for six years before joining. The training alone was worth more than any course I ever took. I closed $97,000 in my first full year with zero finance background.</div><div class="tcard-author"><div class="tcard-avatar" style="background: var(--cmg-navy);">JM</div><div><div class="tcard-name">Jordan M.</div><div class="tcard-detail">Former server → Senior LO, Year 2</div></div></div></div>
+      <div class="tcard"><div class="tcard-stars">★★★★★</div><div class="tcard-quote">My DISC assessment placed me in purchase loans — exactly where my personality thrives. I'm now team lead at 26. The career path laid out is real and they actually hold up their end.</div><div class="tcard-author"><div class="tcard-avatar" style="background: var(--cmg-red);">AL</div><div><div class="tcard-name">Ashley L.</div><div class="tcard-detail">Team Lead, Charleston branch</div></div></div></div>
+      <div class="tcard"><div class="tcard-stars">★★★★★</div><div class="tcard-quote">I came from retail banking and thought I knew mortgages. The training showed me how much I didn't know — and how to close at twice the rate. Best career move I've made.</div><div class="tcard-author"><div class="tcard-avatar" style="background: var(--green);">RC</div><div><div class="tcard-name">Rafael C.</div><div class="tcard-detail">Former bank teller → $145K Year 3</div></div></div></div>
+    </div>
+  </div>
+
+  <div class="section" style="padding-top: 0;">
+    <div class="noexp">
+      <h2>No experience required.<br><span>Hunger is the only prerequisite.</span></h2>
+      <p>If you can hold a conversation, follow a proven system, and genuinely care about helping people into homes — we can teach you everything else. We've turned bartenders, teachers, veterans, and retail workers into top mortgage producers.</p>
+      <div class="noexp-grid">
+        <div class="noexp-card"><div class="noexp-card-icon">🍽️</div><h4>Hospitality</h4><p>Service-first people close more loans. Your empathy is your greatest edge.</p></div>
+        <div class="noexp-card"><div class="noexp-card-icon">🎖️</div><h4>Veterans</h4><p>Discipline, resilience, structure. You already have the mindset we build toward.</p></div>
+        <div class="noexp-card"><div class="noexp-card-icon">🏫</div><h4>Teachers</h4><p>Explaining complex things simply is a superpower in mortgage. Borrow it.</p></div>
+        <div class="noexp-card"><div class="noexp-card-icon">🛍️</div><h4>Retail &amp; Sales</h4><p>You already handle objections all day. Now earn real commission for it.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" style="padding-top: 0;" id="vid-block">
+    <div class="video-block">
+      <div class="video-thumb"><div class="play-circle">▶</div><div class="video-thumb-label">3-minute message from our Branch Manager</div></div>
+      <div class="video-body">
+        <h3>"We built this team to create careers, not fill seats."</h3>
+        <p>When we opened this call center, the goal wasn't volume — it was building a team of mortgage professionals who'd still be here, and thriving, five years from now.</p>
+        <p>Watch this short message to hear what our top performers have in common and what your first 90 days will actually look like.</p>
+        <div class="leader-row">
+          <div class="leader-ava">{{MANAGER_INITIALS}}</div>
+          <div><div class="leader-name">{{MANAGER_NAME}}</div><div class="leader-title">{{MANAGER_TITLE}}</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="full-cta">
+    <h2>Your application takes under 3 minutes.</h2>
+    <p>No cover letter. No lengthy questionnaire. Just your name, phone, and a bit about yourself. A recruiter will be in touch within one business day.</p>
+    <button class="btn-red" style="font-size: 15px; padding: 16px 36px;" onclick="showPage('p4')">Apply Now — It's Free →</button>
+  </div>
+</div>
+
+<!-- PAGE 2: WHY JOIN -->
+<div id="p2" class="page">
+  <div class="why-hero">
+    <div class="section-eyebrow" style="justify-content: center; margin-bottom: 16px;">Why Join Us</div>
+    <h1>The platform that lets<br>great producers <span>win.</span></h1>
+    <p>Tools, leads, coaching, and culture. Here's why our loan officers outperform the market — and why they stay.</p>
+  </div>
+  <div class="section">
+    <div class="pillars-grid">
+      <div class="pillar"><div class="pillar-icon">⚡</div><h3>Technology that closes loans faster</h3><p>Our tech stack puts you three steps ahead of the borrower and ten steps ahead of the competition.</p><div class="pillar-list"><div class="pillar-item"><div class="pillar-dot"></div>Encompass LOS — the industry gold standard</div><div class="pillar-item"><div class="pillar-dot"></div>Salesforce CRM with AI-assisted lead scoring</div><div class="pillar-item"><div class="pillar-dot"></div>Digital mortgage application portal</div><div class="pillar-item"><div class="pillar-dot"></div>Real-time rate alerts for locked borrowers</div><div class="pillar-item"><div class="pillar-dot"></div>E-sign and document automation end-to-end</div></div></div>
+      <div class="pillar"><div class="pillar-icon">🎯</div><h3>Leads — not just a name and number</h3><p>We don't hand you a cold list. Every lead in our system is pre-qualified, categorized, and ready for a real conversation.</p><div class="pillar-list"><div class="pillar-item"><div class="pillar-dot"></div>30–50 warm inbound leads per LO monthly</div><div class="pillar-item"><div class="pillar-dot"></div>Pre-verified credit range and income band</div><div class="pillar-item"><div class="pillar-dot"></div>Segmented by purchase vs. refinance intent</div><div class="pillar-item"><div class="pillar-dot"></div>Automated nurture for long-cycle borrowers</div><div class="pillar-item"><div class="pillar-dot"></div>Realtor referral pipeline included at Year 2</div></div></div>
+      <div class="pillar"><div class="pillar-icon">🏋️</div><h3>Coaching that makes you measurably better</h3><p>Not a manager who checks in weekly. A dedicated performance coach who reviews your calls and tells you exactly what to fix.</p><div class="pillar-list"><div class="pillar-item"><div class="pillar-dot"></div>1:1 coaching 3× per week in Year 1</div><div class="pillar-item"><div class="pillar-dot"></div>Weekly call recording reviews with scored feedback</div><div class="pillar-item"><div class="pillar-dot"></div>Monthly pipeline strategy sessions</div><div class="pillar-item"><div class="pillar-dot"></div>Access to top-performer playbooks and scripts</div><div class="pillar-item"><div class="pillar-dot"></div>Quarterly DISC re-assessment and growth mapping</div></div></div>
+    </div>
+  </div>
+  <div style="background: var(--gray-50); padding: 80px 0;">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <div class="section-eyebrow">Compensation &amp; Benefits</div>
+      <h2 class="section-title">We pay competitively.<br>Then we compete to keep you.</h2>
+      <div class="benefits-grid">
+        <div class="benefit"><div class="benefit-icon">💵</div><div><h4>Base Salary + Uncapped Commission</h4><p>Guaranteed base while building your pipeline, plus competitive BPS on every closed loan. No ceiling, ever.</p></div></div>
+        <div class="benefit"><div class="benefit-icon">🏥</div><div><h4>Full Medical, Dental &amp; Vision</h4><p>We cover 80% of employee premiums from day 30. Dependent coverage available. HSA-compatible plan options.</p></div></div>
+        <div class="benefit"><div class="benefit-icon">🎓</div><div><h4>License &amp; Continuing Education Paid</h4><p>We fund your NMLS pre-licensing, state exam fees, and all annual CE requirements — not just year one.</p></div></div>
+        <div class="benefit"><div class="benefit-icon">📈</div><div><h4>401(k) with 4% Company Match</h4><p>Vesting starts at 90 days. We match dollar-for-dollar up to 4% of your contribution.</p></div></div>
+        <div class="benefit"><div class="benefit-icon">🏖️</div><div><h4>PTO + 11 Federal Holidays</h4><p>15 days PTO to start, all federal holidays, plus a paid birthday day. PTO increases at Year 3.</p></div></div>
+        <div class="benefit"><div class="benefit-icon">🏠</div><div><h4>Employee Mortgage Discount</h4><p>Employees receive preferred pricing on their own home loans. You're in the business — benefit from it.</p></div></div>
+        <div class="benefit"><div class="benefit-icon">🏆</div><div><h4>Performance Bonuses &amp; President's Club</h4><p>Quarterly bonuses, annual President's Club trip for top producers, and monthly team spiff competitions.</p></div></div>
+        <div class="benefit"><div class="benefit-icon">🔁</div><div><h4>Hybrid Work After Year 1</h4><p>Top performers work 2–3 days remote after completing their first full year. Earn the flexibility.</p></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-eyebrow">Culture</div>
+    <h2 class="section-title">The environment you'll actually want to show up to.</h2>
+    <div class="culture-grid">
+      <div class="culture-card"><div class="culture-card-icon">📊</div><h4>Transparent metrics</h4><p>Leaderboards, live comp calculators, and pipeline visibility. You always know exactly where you stand.</p></div>
+      <div class="culture-card"><div class="culture-card-icon">🤝</div><h4>Collaborative, not cutthroat</h4><p>LOs share scripts, referral sources, and wins. Rising tides lift every boat here.</p></div>
+      <div class="culture-card"><div class="culture-card-icon">🎙️</div><h4>Your voice matters</h4><p>Monthly town halls, open-door leadership, and quarterly culture surveys that actually get acted on.</p></div>
+      <div class="culture-card"><div class="culture-card-icon">🌎</div><h4>Diverse and community-rooted</h4><p>We hire from the communities we serve. Understanding our borrowers is competitive advantage.</p></div>
+    </div>
+  </div>
+  <div class="full-cta">
+    <h2>Ready to see if we're right for you?</h2>
+    <p>Apply in under 3 minutes. No resume required to start. A recruiter will be in touch within one business day.</p>
+    <button class="btn-red" style="font-size: 15px; padding: 16px 36px;" onclick="showPage('p4')">Start Your Application →</button>
+  </div>
+</div>
+
+<!-- PAGE 3: HIRING PROCESS -->
+<div id="p3" class="page">
+  <div class="why-hero">
+    <div class="section-eyebrow" style="justify-content: center; margin-bottom: 16px;">How We Hire</div>
+    <h1>From application to first day —<br><span>here's exactly what to expect.</span></h1>
+    <p>No black holes. No ghosting. Our process is designed to be fast, transparent, and respectful of your time. Most candidates go from application to offer in under two weeks.</p>
+  </div>
+  <div class="section">
+    <div class="section-eyebrow">The Process</div>
+    <h2 class="section-title">Six steps. Two weeks.<br>A career that changes everything.</h2>
+    <div class="process-timeline">
+      <div class="process-step"><div class="process-left"><div class="process-node"><div class="process-num">1</div></div><div class="process-line"></div></div><div class="process-body"><div class="process-timing">Day 1</div><h3>Submit Your Application</h3><p>Fill out the short form — name, phone, email, location, and career background. No cover letter. Under 3 minutes.</p><div class="process-detail-row"><div class="process-detail-item"><span>⏱️</span> Under 3 minutes</div><div class="process-detail-item"><span>📄</span> Resume optional</div><div class="process-detail-item"><span>🔒</span> Secure &amp; private</div></div></div></div>
+      <div class="process-step"><div class="process-left"><div class="process-node"><div class="process-num">2</div></div><div class="process-line"></div></div><div class="process-body"><div class="process-timing">Day 1 — Same day</div><h3>Schedule Your Intro Call</h3><p>Immediately after applying, pick a time for a 20-minute intro call right in the form. You'll receive SMS confirmation instantly.</p><div class="process-detail-row"><div class="process-detail-item"><span>📅</span> Pick any open slot</div><div class="process-detail-item"><span>💬</span> SMS reminders sent automatically</div><div class="process-detail-item"><span>🎥</span> Phone or Zoom</div></div></div></div>
+      <div class="process-step"><div class="process-left"><div class="process-node"><div class="process-num">3</div></div><div class="process-line"></div></div><div class="process-body"><div class="process-timing">Day 1–2 · After scheduling</div><h3>Complete Your Pre-Screen Assessment</h3><p>A DISC personality profile, a short sales aptitude quiz, and a few scenario-based questions. About 12 minutes. Sent to your email within 30 minutes of scheduling.</p><div class="process-callout"><div class="process-callout-icon">📧</div><div><div class="process-callout-title">Check your registered email</div><div class="process-callout-desc">Your assessment link arrives within 30 minutes of scheduling. Check your inbox — and spam just in case. Complete it before your intro call for the best experience.</div></div></div></div></div>
+      <div class="process-step"><div class="process-left"><div class="process-node"><div class="process-num">4</div></div><div class="process-line"></div></div><div class="process-body"><div class="process-timing">Day 2–5</div><h3>20-Minute Intro Call</h3><p>A recruiter will review your application and assessment before the call. This isn't an interrogation — it's a conversation. They'll walk through your background, answer every question you have, and give you a realistic picture of the first 90 days.</p><div class="process-detail-row"><div class="process-detail-item"><span>🎯</span> No trick questions</div><div class="process-detail-item"><span>💰</span> Comp discussed openly</div><div class="process-detail-item"><span>🙋</span> Ask us anything</div></div></div></div>
+      <div class="process-step"><div class="process-left"><div class="process-node"><div class="process-num">5</div></div><div class="process-line"></div></div><div class="process-body"><div class="process-timing">Day 5–10</div><h3>Final Interview with Hiring Manager</h3><p>Candidates who move forward will have a second conversation with the branch hiring manager. This is where we align on your specialty track, target earnings, and start timeline.</p><div class="process-detail-row"><div class="process-detail-item"><span>👤</span> 30–45 minutes</div><div class="process-detail-item"><span>🗺️</span> Career path mapped out</div><div class="process-detail-item"><span>📋</span> Start date discussed</div></div></div></div>
+      <div class="process-step process-step-last"><div class="process-left"><div class="process-node process-node-final"><div class="process-num">6</div></div></div><div class="process-body"><div class="process-timing">Day 10–14</div><h3>Offer Letter &amp; Onboarding</h3><p>Offer letters go out within 72 hours of your final interview. The next training class starts every two weeks — so you could be in your first paid training day within a month of applying today.</p><div class="process-detail-row"><div class="process-detail-item"><span>✅</span> Offer within 72 hrs of final interview</div><div class="process-detail-item"><span>🎓</span> Training starts within 2 weeks of acceptance</div></div></div></div>
+    </div>
+  </div>
+  <div style="background: var(--gray-50); padding: 80px 0;">
+    <div class="section" style="padding-top: 0; padding-bottom: 0;">
+      <div class="section-eyebrow">Common Questions</div>
+      <h2 class="section-title">Things candidates ask us all the time.</h2>
+      <div class="faq-grid">
+        <div class="faq-item"><h4>Do I need a mortgage license to apply?</h4><p>No. We fully fund your NMLS pre-licensing education and state exam fees. You'll complete licensing during the first two weeks of paid training.</p></div>
+        <div class="faq-item"><h4>How long does the whole process take?</h4><p>Most candidates receive an offer within 10–14 days of submitting their application.</p></div>
+        <div class="faq-item"><h4>What if I've never worked in finance?</h4><p>That's fine — and honestly, common. Our best performers often come from hospitality, retail, teaching, and the military. We hire for drive and coachability, not résumé.</p></div>
+        <div class="faq-item"><h4>What does the assessment measure?</h4><p>DISC personality profile, basic sales aptitude, and a few scenario questions. There are no wrong answers — it's used to place you in the right specialty and build your coaching plan.</p></div>
+        <div class="faq-item"><h4>Is training really paid?</h4><p>Yes. You'll receive your full base salary during the entire 8-week training program.</p></div>
+        <div class="faq-item"><h4>What if I don't pass my NMLS exam?</h4><p>We provide full exam prep support and allow re-takes. We've helped hundreds of trainees pass on their first attempt.</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="full-cta">
+    <h2>Ready to get started?</h2>
+    <p>The application takes under 3 minutes. Your intro call can be scheduled for as soon as tomorrow.</p>
+    <button class="btn-red" style="font-size: 15px; padding: 16px 36px;" onclick="showPage('p4')">Apply Now →</button>
+  </div>
+</div>
+
+<!-- PAGE 4: APPLY -->
+<div id="p4" class="page">
+  <div class="apply-wrap">
+    <div class="apply-sidebar">
+      <div class="section-eyebrow" style="margin-bottom: 20px;">Apply Now</div>
+      <h2>Tell us about <span>yourself.</span></h2>
+      <p>Your application takes under 3 minutes. No resume required to start. A recruiter will contact you within one business day — and you'll schedule your intro call right here.</p>
+      <div class="apply-points">
+        <div class="apply-point"><div class="apply-point-icon">⏱️</div><div><h4>3-minute application</h4><p>No essays. No cover letters. Just your contact info and a few quick questions.</p></div></div>
+        <div class="apply-point"><div class="apply-point-icon">📅</div><div><h4>Schedule your intro call in the same form</h4><p>Pick your preferred time right after submitting. No waiting for a callback to book.</p></div></div>
+        <div class="apply-point"><div class="apply-point-icon">📧</div><div><h4>Assessment sent to your email</h4><p>Once scheduled, your pre-screen assessment link arrives within 30 minutes. Complete it before your call.</p></div></div>
+        <div class="apply-point"><div class="apply-point-icon">🔒</div><div><h4>Your data stays private</h4><p>We never sell or share your information. Used only for your application.</p></div></div>
+      </div>
+      <div class="bonus-banner">
+        <div class="bonus-banner-title">🎁 Limited-Time Signing Bonus</div>
+        <div class="bonus-banner-body">Apply before {{SIGNING_BONUS_DEADLINE}} and receive a {{SIGNING_BONUS}} signing bonus upon completing training and your first funded loan.</div>
+      </div>
+    </div>
+    <div class="apply-main">
+      <div class="apply-steps-indicator">
+        <div class="asi-step asi-active" id="asi-1"><div class="asi-num">1</div><div class="asi-label">Your Info</div></div>
+        <div class="asi-line" id="asi-line-1"></div>
+        <div class="asi-step" id="asi-2"><div class="asi-num">2</div><div class="asi-label">Schedule Call</div></div>
+        <div class="asi-line" id="asi-line-2"></div>
+        <div class="asi-step" id="asi-3"><div class="asi-num">3</div><div class="asi-label">Confirmation</div></div>
+      </div>
+
+      <div id="apply-step-1">
+        <h2 class="apply-form-title">Start your application</h2>
+        <div class="apply-main-sub">All fields marked with * are required</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">First Name <span class="req">*</span></label><input type="text" class="form-input" placeholder="Jordan"></div>
+          <div class="form-group"><label class="form-label">Last Name <span class="req">*</span></label><input type="text" class="form-input" placeholder="Smith"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Mobile Phone <span class="req">*</span></label><input type="tel" class="form-input" placeholder="(843) 555-0100"></div>
+        <div class="form-group"><label class="form-label">Email Address <span class="req">*</span></label><input type="email" class="form-input" placeholder="jordan@email.com"></div>
+        <div class="form-group"><label class="form-label">City / Area <span class="req">*</span></label><select class="form-input"><option value="">Select your area</option><option>{{LOCATION_DISPLAY}}</option><option>Other location</option></select></div>
+        <div class="form-group"><label class="form-label">Current or Most Recent Career Field</label><select class="form-input"><option value="">Select one</option><option>Mortgage / Lending</option><option>Finance / Banking</option><option>Sales / Business Development</option><option>Real Estate</option><option>Hospitality / Food Service</option><option>Military / Veterans</option><option>Retail / Customer Service</option><option>Healthcare</option><option>Education</option><option>Other</option></select></div>
+        <div class="form-group"><label class="form-label">LinkedIn Profile URL</label><input type="url" class="form-input" placeholder="https://linkedin.com/in/yourname"></div>
+        <div class="form-group"><label class="form-label">Resume (optional)</label><div class="upload-zone" onclick="this.querySelector('input').click()"><div class="upload-zone-icon">📄</div><div class="upload-zone-title">Drop your resume here, or click to browse</div><div class="upload-zone-sub">PDF or Word document · Max 5MB</div><input type="file" style="display:none" accept=".pdf,.doc,.docx"></div></div>
+        <div class="form-group"><label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px; color: var(--gray-600); font-weight: 400;"><input type="checkbox" style="margin-top: 2px; accent-color: var(--cmg-red); width:15px; height:15px; flex-shrink:0;">I agree to receive SMS text messages and calls regarding my application. Standard message rates apply.</label></div>
+        <button class="form-submit-btn" onclick="goToSchedule()">Next: Schedule Your Intro Call →</button>
+        <div class="form-disclaimer">By submitting, you agree to our Privacy Policy and Terms of Use. We are an equal opportunity employer.</div>
+      </div>
+
+      <div id="apply-step-2" style="display:none;">
+        <h2 class="apply-form-title">Schedule your intro call</h2>
+        <div class="apply-main-sub">Pick a date and time — we'll send an SMS confirmation right away</div>
+        <div class="cal-widget" style="max-width:100%; margin-bottom: 20px;">
+          <div class="cal-top"><div class="cal-top-ava">📞</div><div><div class="cal-top-title">Recruiting Team · Intro Call</div><div class="cal-top-sub">20 min · Phone or Zoom · Eastern Time</div></div></div>
+          <div class="cal-body">
+            <div class="cal-nav"><button class="cal-nav-btn" onclick="changeMonth(-1)">‹</button><div class="cal-month-label" id="cal-month-lbl"></div><button class="cal-nav-btn" onclick="changeMonth(1)">›</button></div>
+            <div class="cal-grid" id="cal-grid"></div>
+            <div id="cal-slots-wrap" style="display:none;"><div style="font-family:'Montserrat',sans-serif; font-size:13px; font-weight:700; color:var(--cmg-navy); margin-bottom:10px;" id="cal-slots-lbl">Available times</div><div class="cal-slots" id="cal-slots"></div></div>
+          </div>
+        </div>
+        <div style="display:flex; gap:12px;">
+          <button style="flex:1; background:var(--gray-100); color:var(--cmg-navy); border:none; font-family:'Montserrat',sans-serif; font-size:13px; font-weight:700; padding:14px; border-radius:var(--radius-sm); cursor:pointer;" onclick="backToForm()">← Back</button>
+          <button class="form-submit-btn" style="flex:2; margin-top:0;" onclick="goToConfirmation()">Confirm &amp; Submit →</button>
+        </div>
+      </div>
+
+      <div id="apply-step-3" style="display:none; text-align:center; padding: 20px 0;">
+        <div style="font-size:56px; margin-bottom:16px;">🎉</div>
+        <h2 style="font-family:'Montserrat',sans-serif; font-size:28px; color:var(--cmg-navy); margin-bottom:12px;">You're all set!</h2>
+        <p style="color:var(--gray-600); font-size:16px; line-height:1.65; max-width:480px; margin:0 auto 32px;">Your application is submitted and your intro call is scheduled. Here's what happens next.</p>
+        <div class="next-steps-box" style="margin-bottom:28px;">
+          <div class="next-steps-title">What to do right now</div>
+          <div class="next-steps-items">
+            <div class="next-steps-item"><div class="next-steps-item-num">1</div><div><strong>Check your email inbox</strong> — your pre-screen assessment link will arrive within 30 minutes. Complete it before your intro call.</div></div>
+            <div class="next-steps-item"><div class="next-steps-item-num">2</div><div><strong>Watch for SMS reminders</strong> — you'll receive a confirmation text now, a 24-hour reminder, and a 30-minute heads-up before your call.</div></div>
+            <div class="next-steps-item"><div class="next-steps-item-num">3</div><div><strong>Come prepared with questions</strong> — your recruiter will have reviewed your background and assessment. This is your chance to interview us too.</div></div>
+          </div>
+        </div>
+        <div style="padding:20px 24px; background:var(--cmg-red-pale); border:1px solid rgba(106,170,38,0.3); border-radius:var(--radius-lg); max-width:420px; margin:0 auto 28px; text-align:left;">
+          <div style="font-family:'Montserrat',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--cmg-red); margin-bottom:8px;">📧 Check your email now</div>
+          <div style="font-size:13px; color:var(--gray-800); line-height:1.6;">Your pre-screen assessment has been sent to the email address you provided. It takes about 12 minutes and helps us personalize your training path. <strong>Complete it before your intro call.</strong></div>
+        </div>
+        <button class="btn-red" style="font-size:14px; padding:14px 28px;" onclick="showPage('p1')">← Back to Overview</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 5: FAQ -->
+<div id="p5" class="page">
+  <div class="why-hero">
+    <div class="section-eyebrow" style="justify-content: center; margin-bottom: 16px;">Frequently Asked Questions</div>
+    <h1>Everything you want to<br>know before you <span>apply.</span></h1>
+    <p>Straight answers to the questions candidates ask us most.</p>
+  </div>
+  <div class="section">
+    <div class="faq-category">
+      <div class="faq-cat-header"><div class="faq-cat-icon">💼</div><h2 class="faq-cat-title">The Role</h2></div>
+      <div class="faq-accordion">
+        <div class="faq-acc-item"><button class="faq-acc-btn" onclick="toggleFaq(this)"><span>What does a loan officer actually do day-to-day?</span><span class="faq-chevron">›</span></button><div class="faq-acc-body"><p>You spend most of your day on the phone with borrowers who have already expressed interest in getting a mortgage — warm, pre-qualified leads, not cold calls. You'll guide them through the pre-qualification process, explain loan options, collect documentation, and hand off to processing once you've locked a loan.</p></div></div>
+        <div class="faq-acc-item"><button class="faq-acc-btn" onclick="toggleFaq(this)"><span>Is this a remote position or in-office?</span><span class="faq-chevron">›</span></button><div class="faq-acc-body"><p>The position is in-office during training and your first year. Top performers earn the option to work hybrid (2–3 days remote) after completing their first full year. This is by design — coaching and team energy accelerate your development significantly.</p></div></div>
+        <div class="faq-acc-item"><button class="faq-acc-btn" onclick="toggleFaq(this)"><span>What are the hours?</span><span class="faq-chevron">›</span></button><div class="faq-acc-body"><p>Core hours are Monday through Friday, 8:30 AM – 5:30 PM ET. Some loan officers choose to work occasional early evenings to reach borrowers who are unavailable during the day — this is voluntary. There is no required weekend work.</p></div></div>
+      </div>
+    </div>
+    <div class="faq-category">
+      <div class="faq-cat-header"><div class="faq-cat-icon">💰</div><h2 class="faq-cat-title">Compensation &amp; Benefits</h2></div>
+      <div class="faq-accordion">
+        <div class="faq-acc-item"><button class="faq-acc-btn" onclick="toggleFaq(this)"><span>How exactly does the pay structure work?</span><span class="faq-chevron">›</span></button><div class="faq-acc-body"><p>You receive a guaranteed base salary throughout training and into your first year. Once fully in production, your earnings are base plus commission — expressed in basis points (BPS) per loan closed. There is no cap on commission. Your recruiter will walk through the exact comp model on your intro call.</p></div></div>
+        <div class="faq-acc-item"><button class="faq-acc-btn" onclick="toggleFaq(this)"><span>What is the signing bonus and how do I qualify?</span><span class="faq-chevron">›</span></button><div class="faq-acc-body"><p>Candidates who apply before {{SIGNING_BONUS_DEADLINE}}, complete training, and close their first funded loan will receive a {{SIGNING_BONUS}} signing bonus. It is paid within 30 days of your first loan funding.</p></div></div>
+        <div class="faq-acc-item"><button class="faq-acc-btn" onclick="toggleFaq(this)"><span>Does the company really pay for my mortgage license?</span><span class="faq-chevron">›</span></button><div class="faq-acc-body"><p>Yes — completely. We cover your NMLS pre-licensing education, state exam fees, and first-year license fees. You also remain on full base salary while completing your licensing work during training weeks 1–2.</p></div></div>
+      </div>
+    </div>
+    <div class="faq-category">
+      <div class="faq-cat-header"><div class="faq-cat-icon">📋</div><h2 class="faq-cat-title">Licensing &amp; Qualifications</h2></div>
+      <div class="faq-accordion">
+        <div class="faq-acc-item"><button class="faq-acc-btn" onclick="toggleFaq(this)"><span>Do I need a mortgage license before I apply?</span><span class="faq-chevron">›</span></button><div class="faq-acc-body"><p>No. You do not need an existing license to apply or to be hired. We fully fund your NMLS pre-licensing education and state exam, completed during the first two weeks of paid training.</p></div></div>
+        <div class="faq-acc-item"><button class="faq-acc-btn" onclick="toggleFaq(this)"><span>I have no finance background. Am I really a candidate?</span><span class="faq-chevron">›</span></button><div class="faq-acc-body"><p>Absolutely. Some of our best-performing loan officers came from hospitality, retail, teaching, and the military with zero finance experience. What we hire for is coachability, drive, communication skills, and the ability to build trust quickly with strangers.</p></div></div>
+      </div>
+    </div>
+  </div>
+  <div style="background: var(--gray-50); padding: 64px 48px; text-align: center; border-top: 1px solid var(--gray-200);">
+    <div style="max-width: 560px; margin: 0 auto;">
+      <div class="section-eyebrow" style="justify-content: center; margin-bottom: 14px;">Still have questions?</div>
+      <h2 style="font-size: 28px; color: var(--cmg-navy); margin-bottom: 12px; line-height: 1.25;">Talk to a real person.</h2>
+      <p style="color: var(--gray-600); font-size: 16px; line-height: 1.65; margin-bottom: 32px;">Our recruiting team is available Monday–Friday, 9 AM – 5 PM ET.</p>
+      <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <a href="tel:{{CONTACT_PHONE_TEL}}" class="btn-red" style="text-decoration:none; font-size:14px; padding:13px 24px;">📞 {{CONTACT_PHONE_DISPLAY}}</a>
+        <button class="btn-red" style="background: var(--cmg-navy); font-size:14px; padding:13px 24px;" onclick="showPage('p4')">Apply Now →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div style="font-family:'Montserrat',sans-serif;font-size:18px;font-weight:800;color:white;opacity:0.85;">{{COMPANY_NAME}}</div>
+      <div class="footer-links">
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Use</a>
+        <a href="#">Web Accessibility</a>
+      </div>
+    </div>
+    <div class="footer-legal">
+      {{COMPANY_NAME}} &nbsp;&middot;&nbsp; {{BRANCH_ADDRESS}} &nbsp;&middot;&nbsp; Branch NMLS# {{BRANCH_NMLS}} &nbsp;&middot;&nbsp; {{MANAGER_NAME}} NMLS# {{MANAGER_NMLS}}<br><br>
+      Equal Housing Opportunity. All rights reserved.
+    </div>
+  </div>
+</footer>
+
+<script>
+  function toggleFaq(btn) {
+    const body = btn.nextElementSibling;
+    const isOpen = btn.classList.contains('open');
+    const accordion = btn.closest('.faq-accordion');
+    accordion.querySelectorAll('.faq-acc-btn.open').forEach(b => { b.classList.remove('open'); b.nextElementSibling.classList.remove('open'); });
+    if (!isOpen) { btn.classList.add('open'); body.classList.add('open'); }
+  }
+
+  function showPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    const tab = document.getElementById('tab-' + id);
+    if (tab) tab.classList.add('active');
+    if (id === 'p4') resetApplyForm();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function resetApplyForm() { showStep(1); }
+
+  function showStep(n) {
+    [1,2,3].forEach(i => {
+      const s = document.getElementById('apply-step-' + i);
+      if (s) s.style.display = i === n ? 'block' : 'none';
+      const asi = document.getElementById('asi-' + i);
+      if (asi) {
+        asi.classList.remove('asi-active', 'asi-done');
+        if (i === n) asi.classList.add('asi-active');
+        if (i < n) asi.classList.add('asi-done');
+      }
+      const line = document.getElementById('asi-line-' + i);
+      if (line) line.classList.toggle('done', i < n);
+    });
+    if (n === 2) renderCal();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function backToForm() { showStep(1); }
+
+  async function goToSchedule() {
+    const btn = document.querySelector('#apply-step-1 .form-submit-btn');
+    const origText = btn.textContent;
+    btn.textContent = 'Submitting...';
+    btn.disabled = true;
+
+    const firstName = document.querySelector('#apply-step-1 input[placeholder="Jordan"]')?.value || '';
+    const lastName = document.querySelector('#apply-step-1 input[placeholder="Smith"]')?.value || '';
+    const phone = document.querySelector('#apply-step-1 input[type="tel"]')?.value || '';
+    const email = document.querySelector('#apply-step-1 input[type="email"]')?.value || '';
+    const locationEl = document.querySelector('#apply-step-1 select');
+    const location = locationEl?.value || '';
+    const selects = document.querySelectorAll('#apply-step-1 select');
+    const careerField = selects[1]?.value || '';
+    const linkedin = document.querySelector('#apply-step-1 input[type="url"]')?.value || '';
+
+    if (!firstName || !lastName || !phone || !email || !location) {
+      btn.textContent = origText;
+      btn.disabled = false;
+      alert('Please fill in all required fields.');
+      return;
+    }
+
+    try {
+      const resp = await fetch('{{API_BASE_URL}}/api/v1/recruit-platform/public/apply/{{ORG_SLUG}}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          first_name: firstName, last_name: lastName,
+          phone: phone, email: email, location: location,
+          career_background: careerField, linkedin_url: linkedin,
+          source: 'landing_page', landing_page_slug: '{{PAGE_SLUG}}'
+        })
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        if (err.duplicate) {
+          btn.textContent = origText; btn.disabled = false;
+          alert('We already have an application on file for this email. A recruiter will be in touch!');
+          return;
+        }
+        throw new Error('Submission failed');
+      }
+      const data = await resp.json();
+      window._applicationId = data.candidate_id || data.id;
+      showStep(2);
+    } catch(e) {
+      btn.textContent = origText; btn.disabled = false;
+      alert('Something went wrong. Please try again or call us directly.');
+    }
+  }
+
+  async function goToConfirmation() {
+    const selectedSlot = document.querySelector('.cal-slot.sel')?.textContent || '';
+    const selectedDay = document.querySelector('.cal-d.sel')?.textContent || '';
+    if (window._applicationId && selectedSlot) {
+      fetch('{{API_BASE_URL}}/api/v1/recruit-platform/public/apply/{{ORG_SLUG}}/schedule', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ candidate_id: window._applicationId, selected_time: selectedSlot, selected_day: selectedDay })
+      }).catch(() => {});
+    }
+    showStep(3);
+  }
+
+  let cy = new Date().getFullYear(), cm = new Date().getMonth();
+  const DN = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const TIMES = ['9:00 AM','9:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM','1:00 PM','1:30 PM','2:00 PM','2:30 PM','3:00 PM','3:30 PM'];
+
+  function renderCal() {
+    const grid = document.getElementById('cal-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    DN.forEach(d => { const el = document.createElement('div'); el.className = 'cal-dh'; el.textContent = d; grid.appendChild(el); });
+    document.getElementById('cal-month-lbl').textContent = MN[cm] + ' ' + cy;
+    const first = new Date(cy, cm, 1).getDay();
+    const days = new Date(cy, cm + 1, 0).getDate();
+    const today = new Date();
+    for (let i = 0; i < first; i++) { const el = document.createElement('div'); el.className = 'cal-d'; grid.appendChild(el); }
+    for (let d = 1; d <= days; d++) {
+      const dt = new Date(cy, cm, d);
+      const dow = dt.getDay();
+      const past = dt < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const el = document.createElement('div');
+      if (past || dow === 0 || dow === 6) { el.className = 'cal-d na'; }
+      else { el.className = 'cal-d avail'; el.onclick = () => { document.querySelectorAll('.cal-d').forEach(x => x.classList.remove('sel')); el.classList.add('sel'); showSlots(d, dow); }; }
+      el.textContent = d;
+      grid.appendChild(el);
+    }
+    const sw = document.getElementById('cal-slots-wrap');
+    if (sw) sw.style.display = 'none';
+  }
+
+  function changeMonth(dir) {
+    cm += dir;
+    if (cm > 11) { cm = 0; cy++; }
+    if (cm < 0) { cm = 11; cy--; }
+    renderCal();
+  }
+
+  function showSlots(day, dow) {
+    const wrap = document.getElementById('cal-slots-wrap');
+    document.getElementById('cal-slots-lbl').textContent = 'Available times for ' + DN[dow] + ', ' + MN[cm] + ' ' + day;
+    const sl = document.getElementById('cal-slots');
+    sl.innerHTML = '';
+    TIMES.filter(() => Math.random() > 0.3).forEach(t => {
+      const el = document.createElement('div');
+      el.className = 'cal-slot';
+      el.textContent = t;
+      el.onclick = () => { document.querySelectorAll('.cal-slot').forEach(s => s.classList.remove('sel')); el.classList.add('sel'); };
+      sl.appendChild(el);
+    });
+    wrap.style.display = 'block';
+  }
+
+  // Track page view
+  (function() {
+    fetch('{{API_BASE_URL}}/api/v1/recruit-platform/p/{{PAGE_SLUG}}/view', { method: 'POST' }).catch(() => {});
+  })();
+</script>
+</body>
+</html>
