@@ -1,0 +1,278 @@
+.af-page {
+  min-height: 100vh;
+  background: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  padding: 40px 20px 60px;
+}
+
+.af-container {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+/* Org header */
+.af-org-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.af-org-logo {
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+  border-radius: 16px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.af-org-name {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 6px;
+}
+
+.af-org-tagline {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Card */
+.af-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 36px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06);
+  border: 1px solid #e2e8f0;
+}
+
+.af-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 24px;
+}
+
+/* Section header */
+.af-section {
+  margin-bottom: 28px;
+}
+
+.af-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.af-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.af-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.af-field.full {
+  grid-column: 1 / -1;
+}
+
+.af-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.af-optional {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.af-tooltip {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background: #cbd5e1;
+  border-radius: 50%;
+  text-align: center;
+  line-height: 16px;
+  font-size: 10px;
+  color: #fff;
+  font-weight: 700;
+  cursor: default;
+  position: relative;
+}
+
+.af-tooltip:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.af-input,
+.af-select,
+.af-textarea {
+  padding: 10px 13px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #0f172a;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+
+.af-input:focus,
+.af-select:focus,
+.af-textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+}
+
+.af-input::placeholder,
+.af-textarea::placeholder {
+  color: #94a3b8;
+}
+
+.af-textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+/* Submit */
+.af-submit-row {
+  margin-top: 28px;
+}
+
+.af-submit-btn {
+  width: 100%;
+  padding: 13px;
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  letter-spacing: -0.1px;
+}
+
+.af-submit-btn:hover:not(:disabled) {
+  background: #1e40af;
+}
+
+.af-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.af-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  margin-bottom: 20px;
+}
+
+/* States */
+.af-inactive {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.af-inactive-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.af-inactive h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #374151;
+  margin: 0 0 8px;
+}
+
+.af-inactive p {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.af-success {
+  text-align: center;
+  padding: 60px 20px;
+  max-width: 480px;
+  margin: 80px auto 0;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.06);
+  border: 1px solid #e2e8f0;
+}
+
+.af-success-icon {
+  font-size: 52px;
+  margin-bottom: 16px;
+}
+
+.af-success h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 10px;
+}
+
+.af-success p {
+  font-size: 15px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.af-loading {
+  text-align: center;
+  padding: 80px 20px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .af-card {
+    padding: 24px 20px;
+  }
+
+  .af-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .af-field.full {
+    grid-column: unset;
+  }
+}

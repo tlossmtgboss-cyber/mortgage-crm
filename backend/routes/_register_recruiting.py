@@ -118,4 +118,13 @@ def register_recruiting_routes(app, get_db, get_current_user, get_current_user_f
     except Exception as e:
         logger.warning(f"Could not load Recruit Calendar routes: {e}")
 
+    # Include Recruit Platform routes (standalone ATS — platform admin + public application)
+    try:
+        from routes.recruit_platform import router as rp_router, public_router as rp_public_router
+        app.include_router(rp_router, tags=["Recruit Platform"])
+        app.include_router(rp_public_router, tags=["Recruit Platform Public"])
+        logger.info("Recruit Platform routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load Recruit Platform routes: {e}")
+
     logger.info("Recruiting route group loaded")

@@ -1,0 +1,397 @@
+.rd-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f1f5f9;
+}
+
+/* Top bar */
+.rd-topbar {
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.rd-topbar-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-right: 8px;
+}
+
+.rd-search {
+  flex: 1;
+  max-width: 320px;
+  padding: 8px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.rd-search:focus {
+  border-color: #3b82f6;
+}
+
+.rd-filter-select {
+  padding: 8px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: #374151;
+  background: #fff;
+  outline: none;
+  cursor: pointer;
+}
+
+.rd-export-btn {
+  padding: 8px 16px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-left: auto;
+}
+
+.rd-export-btn:hover {
+  background: #e2e8f0;
+}
+
+/* Kanban board */
+.rd-board {
+  flex: 1;
+  overflow-x: auto;
+  padding: 20px 24px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.rd-column {
+  min-width: 220px;
+  width: 220px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 140px);
+}
+
+.rd-col-header {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.rd-col-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.rd-col-count {
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.rd-col-cards {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Applicant card */
+.rd-card {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 12px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.rd-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  border-color: #cbd5e1;
+}
+
+.rd-card-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+.rd-card-email {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.rd-card-phone {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.rd-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.rd-source-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.rd-nmls-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.rd-card-date {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+/* Side drawer */
+.rd-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 400;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rd-drawer {
+  width: 420px;
+  max-width: 100vw;
+  background: #fff;
+  height: 100%;
+  overflow-y: auto;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+.rd-drawer-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.rd-drawer-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px;
+}
+
+.rd-drawer-email {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.rd-drawer-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.rd-drawer-close:hover {
+  color: #374151;
+}
+
+.rd-drawer-body {
+  flex: 1;
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+.rd-detail-section {
+  margin-bottom: 24px;
+}
+
+.rd-detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.rd-detail-row {
+  display: flex;
+  gap: 8px;
+  font-size: 13.5px;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.rd-detail-key {
+  font-weight: 600;
+  color: #64748b;
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.rd-status-select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #0f172a;
+  background: #fff;
+  outline: none;
+}
+
+.rd-status-select:focus {
+  border-color: #3b82f6;
+}
+
+.rd-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.rd-note {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.rd-note-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.rd-note-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rd-note-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13.5px;
+  resize: vertical;
+  min-height: 80px;
+  outline: none;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.rd-note-input:focus {
+  border-color: #3b82f6;
+}
+
+.rd-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rd-btn-primary {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.rd-btn-primary:hover:not(:disabled) {
+  background: #1e40af;
+}
+
+.rd-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.rd-btn-secondary {
+  background: #f1f5f9;
+  color: #374151;
+}
+
+.rd-btn-secondary:hover {
+  background: #e2e8f0;
+}
+
+.rd-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rd-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.rd-empty-col {
+  padding: 20px 8px;
+  text-align: center;
+  color: #cbd5e1;
+  font-size: 13px;
+}

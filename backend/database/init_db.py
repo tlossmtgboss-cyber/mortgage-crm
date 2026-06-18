@@ -2416,6 +2416,22 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ Admin permission fix note: {e}")
 
+        # Recruit Platform: create job postings table
+        try:
+            from migrations.add_recruit_job_postings import run_migration as run_job_postings
+            run_job_postings(_engine)
+            logger.info("✅ recruit_job_postings table ready")
+        except Exception as e:
+            logger.warning(f"⚠️ recruit_job_postings migration note: {e}")
+
+        # Recruit Platform: seed default org + platform admin user
+        try:
+            from migrations.seed_recruit_platform_admin import run_migration as run_platform_admin_seed
+            run_platform_admin_seed(_engine)
+            logger.info("✅ recruit platform admin seed complete")
+        except Exception as e:
+            logger.warning(f"⚠️ recruit platform admin seed note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")

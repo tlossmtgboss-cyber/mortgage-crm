@@ -1,0 +1,203 @@
+.recruit-login-page {
+  display: flex;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Left panel — dark navy brand panel */
+.recruit-login-left {
+  flex: 1;
+  background: #0f172a;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 60px 56px;
+  color: white;
+}
+
+.recruit-login-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 56px;
+}
+
+.recruit-brand-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.recruit-brand-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.3px;
+}
+
+.recruit-login-headline {
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.15;
+  margin: 0 0 20px;
+  letter-spacing: -0.8px;
+  color: #fff;
+}
+
+.recruit-login-subtext {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.6;
+  max-width: 380px;
+  margin: 0;
+}
+
+/* Right panel — white login card */
+.recruit-login-right {
+  width: 480px;
+  min-width: 480px;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.recruit-login-card {
+  width: 100%;
+  max-width: 380px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.08);
+}
+
+.recruit-login-card h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 28px;
+  letter-spacing: -0.3px;
+}
+
+.recruit-login-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  margin-bottom: 20px;
+}
+
+.recruit-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.recruit-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.recruit-form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.recruit-form-group input {
+  padding: 10px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #0f172a;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.recruit-form-group input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.recruit-form-group input::placeholder {
+  color: #94a3b8;
+}
+
+.recruit-login-forgot {
+  text-align: right;
+  margin-top: -8px;
+}
+
+.recruit-login-forgot a {
+  font-size: 13px;
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.recruit-login-forgot a:hover {
+  text-decoration: underline;
+}
+
+.recruit-login-btn {
+  padding: 12px;
+  background: #1d4ed8;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  margin-top: 4px;
+}
+
+.recruit-login-btn:hover:not(:disabled) {
+  background: #1e40af;
+}
+
+.recruit-login-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.recruit-login-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.recruit-login-footer {
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 24px 0 0;
+}
+
+/* Mobile: stack panels vertically */
+@media (max-width: 768px) {
+  .recruit-login-page {
+    flex-direction: column;
+  }
+
+  .recruit-login-left {
+    padding: 40px 28px 36px;
+    flex: none;
+  }
+
+  .recruit-login-headline {
+    font-size: 30px;
+  }
+
+  .recruit-login-right {
+    width: 100%;
+    min-width: unset;
+    padding: 28px 20px 40px;
+  }
+
+  .recruit-login-card {
+    padding: 28px 24px;
+  }
+}
