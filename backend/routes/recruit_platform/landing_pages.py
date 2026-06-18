@@ -121,7 +121,7 @@ class ScheduleSlot(BaseModel):
 
 def _get_tenant_id(org_slug: str, db: Session) -> Optional[int]:
     row = db.execute(
-        text("SELECT id FROM recruit_platform_tenants WHERE org_slug = :s LIMIT 1"),
+        text("SELECT id FROM organizations WHERE slug = :s LIMIT 1"),
         {"s": org_slug},
     ).fetchone()
     return row[0] if row else None
@@ -407,7 +407,7 @@ def preview_landing_page(
         text("""
             SELECT rp.id, rp.slug, rp.config, t.org_slug
             FROM recruit_landing_pages rp
-            JOIN recruit_platform_tenants t ON t.id = rp.organization_id
+            JOIN organizations t ON t.id = rp.organization_id
             WHERE rp.id = :pid AND rp.organization_id = :oid
         """),
         {"pid": page_id, "oid": org_id},
@@ -429,7 +429,7 @@ def serve_landing_page(slug: str, db: Session = Depends(get_db)):
         text("""
             SELECT rp.id, rp.slug, rp.config, t.org_slug
             FROM recruit_landing_pages rp
-            JOIN recruit_platform_tenants t ON t.id = rp.organization_id
+            JOIN organizations t ON t.id = rp.organization_id
             WHERE rp.slug = :slug AND rp.status = 'published'
             LIMIT 1
         """),
