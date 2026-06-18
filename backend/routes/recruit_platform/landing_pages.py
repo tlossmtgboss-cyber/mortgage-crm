@@ -419,6 +419,39 @@ def preview_landing_page(
     return Response(content=html, media_type="text/html")
 
 
+@landing_pages_router.post("/seed-callcenter", status_code=201)
+def seed_callcenter_page(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from migrations.add_recruit_landing_pages import _CALLCENTER_CONFIG
+    import json as _json
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization")
+    try:
+        row = db.execute(text("""
+            INSERT INTO recruit_landing_pages
+                (organization_id, title, slug, status, config, created_by)
+            VALUES (:oid, :title, :slug, 'published', CAST(:config AS jsonb), :uid)
+            ON CONFLICT (organization_id, slug) DO NOTHING
+            RETURNING id, title, slug, status
+        """), {
+            "oid": org_id,
+            "title": "Call Center — SC",
+            "slug": "callcenter",
+            "config": _json.dumps(_CALLCENTER_CONFIG),
+            "uid": getattr(current_user, "id", None),
+        }).fetchone()
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    if row:
+        return {"seeded": True, "page": {"id": row[0], "title": row[1], "slug": row[2]}}
+    return {"seeded": False, "reason": "Already exists"}
+
+
 # ---------------------------------------------------------------------------
 # Public endpoints
 # ---------------------------------------------------------------------------

@@ -102,21 +102,17 @@ export default function RecruitLayout() {
             <NavIcon path="jobs" />
             Jobs
           </NavLink>
+          <NavLink to="/recruit/interviews" className={({ isActive }) => `rp-nav-item${isActive ? ' active' : ''}`}>
+            <NavIcon path="interviews" />
+            Interviews
+          </NavLink>
           <NavLink to="/recruit/knowledge-base" className={({ isActive }) => `rp-nav-item${isActive ? ' active' : ''}`}>
             <NavIcon path="knowledgebase" />
             Knowledge Base
           </NavLink>
-          <a href="/recruiting/interviews" className="rp-nav-item">
-            <NavIcon path="interviews" />
-            Interviews
-          </a>
           <NavLink to="/recruit/website-builder" className={({ isActive }) => `rp-nav-item${isActive ? ' active' : ''}`}>
-            <NavIcon path="website" />
+            <NavIcon path="websitebuilder" />
             Website Builder
-          </NavLink>
-          <NavLink to="/recruit/knowledge-base" className={({ isActive }) => `rp-nav-item${isActive ? ' active' : ''}`}>
-            <NavIcon path="kb" />
-            Knowledge Base
           </NavLink>
           <NavLink to="/recruit/chat-widget" className={({ isActive }) => `rp-nav-item${isActive ? ' active' : ''}`}>
             <NavIcon path="chat" />
@@ -125,18 +121,6 @@ export default function RecruitLayout() {
           <NavLink to="/recruit/embed-settings" className={({ isActive }) => `rp-nav-item${isActive ? ' active' : ''}`}>
             <NavIcon path="embed" />
             Embed &amp; Share
-          </NavLink>
-          <a href="/settings" className="rp-nav-item">
-            <NavIcon path="settings" />
-            Settings
-          </a>
-          <NavLink to="/recruit/embed-settings" className={({ isActive }) => `rp-nav-item${isActive ? ' active' : ''}`}>
-            <NavIcon path="embed" />
-            Embed &amp; Share
-          </NavLink>
-          <NavLink to="/recruit/website-builder" className={({ isActive }) => `rp-nav-item${isActive ? ' active' : ''}`}>
-            <NavIcon path="websitebuilder" />
-            Website Builder
           </NavLink>
           {isPlatformAdmin && (
             <NavLink to="/recruit/license-manager" className={({ isActive }) => `rp-nav-item${isActive ? ' active' : ''}`}>
