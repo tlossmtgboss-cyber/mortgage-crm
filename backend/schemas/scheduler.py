@@ -35,7 +35,7 @@ Organized by functional area:
 
 from __future__ import annotations
 
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
@@ -486,6 +486,18 @@ class PublicBookingConfirmRequest(BaseModel):
     utm_content: Optional[str] = Field(None, max_length=200)
     referrer: Optional[str] = Field(None, max_length=2000)
 
+    @field_validator('start_time')
+    @classmethod
+    def validate_booking_window(cls, v: datetime) -> datetime:
+        now = datetime.now(timezone.utc)
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        if v < now - timedelta(minutes=15):
+            raise ValueError('Cannot book appointments in the past')
+        if v > now + timedelta(days=365):
+            raise ValueError('Cannot book appointments more than 365 days in advance')
+        return v
+
 
 class WebsiteDemoBookingRequest(BaseModel):
     """Request model for website demo booking confirmation"""
@@ -497,6 +509,18 @@ class WebsiteDemoBookingRequest(BaseModel):
     notes: Optional[str] = Field(None, max_length=500)
     meeting_mode: str = Field("video", max_length=20)
     organization_id: Optional[int] = Field(None, description="Organization ID for multi-tenant isolation")
+
+    @field_validator('start_time')
+    @classmethod
+    def validate_booking_window(cls, v: datetime) -> datetime:
+        now = datetime.now(timezone.utc)
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        if v < now - timedelta(minutes=15):
+            raise ValueError('Cannot book appointments in the past')
+        if v > now + timedelta(days=365):
+            raise ValueError('Cannot book appointments more than 365 days in advance')
+        return v
 
 
 # =============================================================================
