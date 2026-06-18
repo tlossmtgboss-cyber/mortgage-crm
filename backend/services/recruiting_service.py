@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from dataclasses import dataclass
 import logging
 import json
+import re
+import secrets
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 logger = logging.getLogger(__name__)
@@ -1372,9 +1374,6 @@ class RecruitingService:
         last_name: str
     ) -> Dict[str, Any]:
         """Auto-create recruit portal workspace for a candidate."""
-        import re
-        import secrets
-
         try:
             # Generate slug from name with cryptographic random suffix
             base_slug = f"{first_name.lower()}-{last_name.lower()}" if first_name and last_name else f"candidate-{candidate_id}"
