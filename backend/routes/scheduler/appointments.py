@@ -1043,7 +1043,7 @@ async def update_appointment(
             update_fields["scheduled_end"] = new_end
 
         # Conflict check for rescheduled time (exclude self to avoid self-conflict)
-        _check_appointment_conflict(
+        await _check_appointment_conflict(
             db,
             appointment.assigned_user_id,
             new_start,
@@ -1409,6 +1409,33 @@ async def cancel_appointment(
             team_member_name = team_member.full_name or team_member.email
             team_member_email = team_member.email
 
+    # Policy check BEFORE any DB mutation or commit — raises 422 if not allowed
+    within_policy = None
+    is_late_cancellation = None
+    try:
+        from services.cancellation_policy_service import CancellationPolicyService
+        policy_svc = CancellationPolicyService(db)
+        cancelled_by_email = getattr(user, 'email', None)
+        policy_result = policy_svc.can_cancel(
+            appointment_id=appointment_id,
+            cancelled_by_email=cancelled_by_email,
+            org_id=org_id,
+            is_staff=is_admin,
+        )
+        if not policy_result.get("allowed", True):
+            raise HTTPException(
+                status_code=422,
+                detail=policy_result.get("reason", "Cancellation not allowed by policy"),
+            )
+        # Capture policy metadata for audit logging below
+        is_late_cancellation = policy_result.get("is_late", False)
+        within_policy = not is_late_cancellation
+    except HTTPException:
+        raise  # Re-raise our 422 — don't swallow it
+    except Exception as e:
+        logger.warning(f"Cancellation policy check failed: {e}")
+        raise HTTPException(status_code=503, detail="Unable to verify cancellation policy")
+
     # Cancel the appointment
     appointment.status = AppointmentStatus.CANCELLED
     appointment.cancelled_at = datetime.now(timezone.utc)
@@ -1440,22 +1467,6 @@ async def cancel_appointment(
 
     # H-2: Single atomic commit -- cancellation + audit + activity + task
     db.commit()
-
-    # Enterprise audit: structured log for compliance
-    # Determine if cancellation is within the org's cancellation policy
-    within_policy = None
-    is_late_cancellation = None
-    try:
-        from services.cancellation_policy_service import CancellationPolicyService
-        policy_svc = CancellationPolicyService(db)
-        policy = policy_svc.get_or_create_policy(org_id)
-        if policy and appointment.scheduled_start:
-            min_notice_hours = getattr(policy, "min_notice_hours", 24)
-            notice_given = (appointment.scheduled_start - datetime.now(timezone.utc).replace(tzinfo=None)).total_seconds() / 3600
-            is_late_cancellation = notice_given < min_notice_hours
-            within_policy = not is_late_cancellation
-    except Exception as e:
-        logger.debug(f"Could not check cancellation policy for audit: {e}")
 
     scheduler_audit.log_appointment_cancelled(
         appointment, user, reason=reason, request=request,

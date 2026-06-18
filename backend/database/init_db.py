@@ -1923,6 +1923,14 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ campaign template seed note: {e}")
 
+        # Recruit Calendar: recruit_interview_details + recruit_milestones tables
+        try:
+            from migrations.add_recruit_calendar_tables import run_migration as run_recruit_calendar
+            run_recruit_calendar(_engine)
+            logger.info("✅ recruit_interview_details + recruit_milestones tables ready")
+        except Exception as e:
+            logger.warning(f"⚠️ recruit calendar tables note: {e}")
+
         # Add briefing_preferences JSONB column to users
         try:
             from migrations.add_briefing_preferences import run_migration as run_briefing_prefs
@@ -2340,6 +2348,33 @@ def init_db():
             logger.info("✅ Scheduler RLS policies enabled")
         except Exception as e:
             logger.warning(f"⚠️ Scheduler RLS migration note: {e}")
+
+        # Recruiting: score gate bypass audit log table
+        try:
+            import importlib
+            _sgbl_mod = importlib.import_module("migrations.add_score_gate_bypass_log")
+            _sgbl_mod.run_migration(_engine)
+            logger.info("✅ mm_score_gate_bypass_log table ready")
+        except Exception as e:
+            logger.warning(f"⚠️ add_score_gate_bypass_log migration note: {e}")
+
+        # Recruiting: add human sign-off columns to recruit_ai_audit_log
+        try:
+            import importlib
+            _raal_mod = importlib.import_module("migrations.add_recruit_ai_audit_log_fields")
+            _raal_mod.run_migration(_engine)
+            logger.info("✅ recruit_ai_audit_log human review columns ready")
+        except Exception as e:
+            logger.warning(f"⚠️ add_recruit_ai_audit_log_fields migration note: {e}")
+
+        # Enable PostgreSQL RLS on all mm_* (recruiting) tables
+        try:
+            import importlib
+            _rec_rls_mod = importlib.import_module("migrations.enable_recruiting_rls")
+            _rec_rls_mod.run_migration(_engine)
+            logger.info("✅ Recruiting RLS policies enabled")
+        except Exception as e:
+            logger.warning(f"⚠️ enable_recruiting_rls migration note: {e}")
 
         # Voicemail tables: add organization_id for multi-tenant isolation
         try:

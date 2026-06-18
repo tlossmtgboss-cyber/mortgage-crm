@@ -136,7 +136,7 @@ class RescheduleService:
     # 3. Confirm reschedule
     # ------------------------------------------------------------------
 
-    def confirm_reschedule(
+    async def confirm_reschedule(
         self,
         appointment_id: int,
         new_start: datetime,
@@ -175,7 +175,7 @@ class RescheduleService:
 
         # Conflict check (SELECT FOR UPDATE)
         from routes.scheduler._helpers import _check_appointment_conflict
-        _check_appointment_conflict(
+        await _check_appointment_conflict(
             self.db,
             appt.assigned_user_id,
             new_start,

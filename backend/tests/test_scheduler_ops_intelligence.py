@@ -1158,6 +1158,7 @@ class TestAppointmentConflict:
         """_check_appointment_conflict raises 409 when overlapping appointment found."""
         from routes.scheduler._helpers import _check_appointment_conflict
         from fastapi import HTTPException
+        import asyncio
 
         mock_conflict = MagicMock()
         mock_conflict.id = 55
@@ -1180,13 +1181,13 @@ class TestAppointmentConflict:
 
         try:
             with pytest.raises(HTTPException) as exc_info:
-                _check_appointment_conflict(
+                asyncio.run(_check_appointment_conflict(
                     db=mock_db,
                     assigned_user_id=1,
                     start_time=datetime(2026, 3, 10, 14, 0),
                     end_time=datetime(2026, 3, 10, 14, 30),
                     org_id=1,
-                )
+                ))
             assert exc_info.value.status_code == 409
         finally:
             mod._models = original_models
@@ -1194,6 +1195,7 @@ class TestAppointmentConflict:
     def test_no_conflict_passes(self):
         """_check_appointment_conflict passes silently when no conflict."""
         from routes.scheduler._helpers import _check_appointment_conflict
+        import asyncio
 
         mock_db = MagicMock()
         mock_query = MagicMock()
@@ -1212,13 +1214,13 @@ class TestAppointmentConflict:
 
         try:
             # Should not raise
-            _check_appointment_conflict(
+            asyncio.run(_check_appointment_conflict(
                 db=mock_db,
                 assigned_user_id=1,
                 start_time=datetime(2026, 3, 10, 14, 0),
                 end_time=datetime(2026, 3, 10, 14, 30),
                 org_id=1,
-            )
+            ))
         finally:
             mod._models = original_models
 

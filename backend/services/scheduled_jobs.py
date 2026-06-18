@@ -215,6 +215,43 @@ def _populate_registry():
         lock_ttl=120,
     ))
 
+    # Calendar sync push/pull jobs (Salesforce ↔ CRM, every 2 minutes)
+    try:
+        from tasks.calendar_sync_tasks import (
+            process_pending_sync_events_sync,
+            poll_salesforce_events_sync,
+            check_sync_health_sync,
+        )
+        jobs.append(JobDefinition(
+            name="calendar_sync_pending",
+            func=process_pending_sync_events_sync,
+            trigger="interval",
+            trigger_kwargs={"minutes": 2},
+            domain="sync",
+            description="Process pending calendar sync events (push CRM → Salesforce)",
+            lock_ttl=110,
+        ))
+        jobs.append(JobDefinition(
+            name="calendar_sync_poll",
+            func=poll_salesforce_events_sync,
+            trigger="interval",
+            trigger_kwargs={"minutes": 2},
+            domain="sync",
+            description="Poll Salesforce for event changes (pull Salesforce → CRM)",
+            lock_ttl=110,
+        ))
+        jobs.append(JobDefinition(
+            name="calendar_sync_health",
+            func=check_sync_health_sync,
+            trigger="interval",
+            trigger_kwargs={"minutes": 15},
+            domain="sync",
+            description="Calendar sync health check",
+            lock_ttl=60,
+        ))
+    except ImportError as e:
+        logger.warning("Calendar sync tasks not available: %s", e)
+
     # MS365 and email sync jobs are registered dynamically from app_lifespan.py
     # via scheduler_service.register_job() because they need async wrappers
     # defined at startup time. They still get distributed lock wrapping.

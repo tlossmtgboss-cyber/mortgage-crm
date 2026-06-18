@@ -2,21 +2,26 @@
 NMLS License Validation Service
 
 Validates NMLS license data for mortgage recruiting compliance.
-Does NOT perform live lookups (NMLS Consumer Access lacks a public REST API).
-Validates completeness, format, and expiration of candidate NMLS data.
+Performs format validation + opportunistic live lookup against NMLS Consumer Access.
 """
 
 import logging
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+import httpx
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from utils.validators import validate_nmls
 
 logger = logging.getLogger(__name__)
+
+_NMLS_LOOKUP_URL = (
+    "https://www.nmlsconsumeraccess.org/api/SearchResults"
+    "?searchValue={nmls_id}&searchType=IndividualNMLSID"
+)
 
 
 @dataclass
@@ -26,6 +31,8 @@ class NMLSValidationResult:
     issues: List[Dict[str, str]] = field(default_factory=list)
     warnings: List[Dict[str, str]] = field(default_factory=list)
     license_summary: Dict[str, Any] = field(default_factory=dict)
+    verification_status: str = "unverified_format_only"
+    last_verified_at: Optional[str] = None
 
 
 class NMLSValidationService:
@@ -44,7 +51,33 @@ class NMLSValidationService:
         except ValueError:
             return f"NMLS ID '{nmls_id}' invalid format — must be 5-12 digits"
 
-    def check_license_status(
+    async def lookup_nmls_public(self, nmls_id: str) -> str:
+        """
+        Attempt a live NMLS Consumer Access lookup.
+        Returns "verified_public", "not_found", or "unverified_format_only".
+        """
+        try:
+            url = _NMLS_LOOKUP_URL.format(nmls_id=nmls_id)
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(url, headers={"Accept": "application/json"})
+            if resp.status_code == 200:
+                data = resp.json()
+                # Response is a list of result objects; empty list means not found
+                if isinstance(data, list) and len(data) > 0:
+                    return "verified_public"
+                elif isinstance(data, dict) and data.get("Results"):
+                    return "verified_public"
+                return "not_found"
+            elif resp.status_code == 404:
+                return "not_found"
+            else:
+                logger.warning("NMLS lookup non-200 status %s for %s", resp.status_code, nmls_id)
+                return "unverified_format_only"
+        except Exception as exc:
+            logger.warning("NMLS public lookup failed for %s: %s", nmls_id, exc)
+            return "unverified_format_only"
+
+    async def check_license_status(
         self, candidate_id: int, organization_id: int
     ) -> NMLSValidationResult:
         """Full license validation for a candidate."""
@@ -137,5 +170,18 @@ class NMLSValidationService:
             "ce_completed": row.ce_credits_completed,
             "sponsorship_status": row.sponsorship_transfer_status,
         }
+
+        # Live NMLS public lookup (best-effort; never blocks validation)
+        if row.nmls_id and not format_error:
+            verification_status = await self.lookup_nmls_public(row.nmls_id)
+            result.verification_status = verification_status
+            result.last_verified_at = datetime.now(timezone.utc).isoformat()
+            if verification_status == "not_found":
+                result.warnings.append({
+                    "type": "NMLS_NOT_FOUND",
+                    "message": f"NMLS ID {row.nmls_id} not found in NMLS Consumer Access public database",
+                })
+        else:
+            result.verification_status = "unverified_format_only"
 
         return result

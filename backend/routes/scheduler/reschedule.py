@@ -348,7 +348,7 @@ async def public_reschedule_confirm(
         old_end = None
 
     try:
-        result = svc.confirm_reschedule(
+        result = await svc.confirm_reschedule(
             appointment_id=appointment_id,
             new_start=new_start,
             new_end=new_end,

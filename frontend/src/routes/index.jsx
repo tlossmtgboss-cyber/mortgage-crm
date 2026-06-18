@@ -308,6 +308,12 @@ const CarouselBuilder = lazyRetry(() => import('../pages/CarouselBuilder/Carouse
 
 // Master Manager pages
 const MasterManagerCapacity = lazyRetry(() => import('../pages/MasterManager/CapacityCommandCenter'));
+
+// Recruiting Platform (standalone scheduling platform with smart calendar)
+const RecruitingPlatform = lazyRetry(() => import('../pages/RecruitingPlatform'));
+const InterviewCalendar = lazyRetry(() => import('../pages/RecruitingPlatform/InterviewCalendar'));
+const MilestonesBoard = lazyRetry(() => import('../pages/RecruitingPlatform/MilestonesBoard'));
+const CandidateBookingPage = lazyRetry(() => import('../pages/RecruitingPlatform/CandidateBookingPage'));
 const AgentGym = lazyRetry(() => import('../pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('../pages/AgentGovernanceSettings'));
 const MemoryStaging = lazyRetry(() => import('../pages/MemoryStaging'));
@@ -520,6 +526,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/book/org/:orgSlug" path="/book/org/:orgSlug" element={<LazyPage><PublicBooking /></LazyPage>} />,
     <Route key="/book/:slug" path="/book/:slug" element={<LazyPage><PublicBooking /></LazyPage>} />,
     <Route key="/embed/book/:slug" path="/embed/book/:slug" element={<LazyPage><EmbedBooking /></LazyPage>} />,
+    <Route key="/recruit-portal/:token" path="/recruit-portal/:token" element={<LazyPage><CandidateBookingPage /></LazyPage>} />,
     <Route key="/booking/confirmation/:appointmentId" path="/booking/confirmation/:appointmentId" element={<LazyPage><BookingConfirmationPage /></LazyPage>} />,
     <Route key="/portal-test" path="/portal-test" element={<LazyPage><PortalTest /></LazyPage>} />,
 
@@ -743,6 +750,11 @@ export function getRoutes(layoutProps, options = {}) {
 
     // Master Manager
     <Route key="/master-manager" path="/master-manager" element={withMainLayout(MasterManagerCapacity)} />,
+
+    // Recruiting Platform (standalone scheduling platform)
+    <Route key="/recruiting" path="/recruiting" element={withMainLayout(RecruitingPlatform)} />,
+    <Route key="/recruiting/interviews" path="/recruiting/interviews" element={withMainLayout(InterviewCalendar)} />,
+    <Route key="/recruiting/milestones" path="/recruiting/milestones" element={withMainLayout(MilestonesBoard)} />,
 
     // Settings
     <Route key="/settings" path="/settings" element={withMainLayout(Settings)} />,

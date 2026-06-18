@@ -227,7 +227,7 @@ async def bulk_create_appointments(
             scheduled_end = item.scheduled_start + timedelta(minutes=item.duration_minutes)
 
             # Conflict and duplicate checks
-            _check_appointment_conflict(
+            await _check_appointment_conflict(
                 db, assigned_user, item.scheduled_start, scheduled_end, org_id=org_id
             )
             _check_duplicate_booking(
@@ -604,7 +604,7 @@ async def bulk_reschedule_appointments(
             new_end = item.new_scheduled_start + timedelta(minutes=duration)
 
             # Conflict check (exclude self)
-            _check_appointment_conflict(
+            await _check_appointment_conflict(
                 db,
                 appointment.assigned_user_id,
                 item.new_scheduled_start,
@@ -796,7 +796,7 @@ async def bulk_assign_appointments(
 
             # Check new LO has no conflict at this time
             if appointment.scheduled_start and appointment.scheduled_end:
-                _check_appointment_conflict(
+                await _check_appointment_conflict(
                     db,
                     item.new_lo_id,
                     appointment.scheduled_start,
@@ -1246,7 +1246,7 @@ async def batch_book_appointments(
         assigned_user = item.assigned_user_id or user.id
 
         try:
-            _check_appointment_conflict(
+            await _check_appointment_conflict(
                 db, assigned_user, item.scheduled_start, scheduled_end, org_id=org_id,
             )
         except HTTPException:
@@ -1286,7 +1286,7 @@ async def batch_book_appointments(
 
             # Re-check conflict inside savepoint (another request may have
             # inserted since pre-validation)
-            _check_appointment_conflict(
+            await _check_appointment_conflict(
                 db, assigned_user, item.scheduled_start, scheduled_end, org_id=org_id,
             )
             _check_duplicate_booking(

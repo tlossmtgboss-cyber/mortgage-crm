@@ -27,7 +27,7 @@ Notes:
 
 import functools
 import logging
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from feature_tiers import FeatureTier, get_tier
 
 logger = logging.getLogger(__name__)
@@ -90,3 +90,45 @@ def require_feature_tier(module: str):
             return await func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def feature_tier_dependency(module: str):
+    """
+    Return a FastAPI Depends-compatible callable that enforces tier access.
+
+    Usage (router-level):
+        from fastapi import Depends
+        router = APIRouter(dependencies=[Depends(feature_tier_dependency("recruiting"))])
+    """
+    tier = get_tier(module)
+
+    async def _check(request: Request) -> None:
+        if tier == FeatureTier.CORE:
+            return
+
+        if hasattr(request.state, 'organization'):
+            org = request.state.organization
+            org_tier = getattr(org, 'feature_tier', 'core')
+
+            tier_hierarchy = {
+                FeatureTier.CORE: 0,
+                FeatureTier.PREMIUM: 1,
+                FeatureTier.EXPERIMENTAL: 2,
+            }
+
+            org_level = tier_hierarchy.get(FeatureTier(org_tier), 0)
+            required_level = tier_hierarchy.get(tier, 0)
+
+            if org_level < required_level:
+                raise HTTPException(
+                    status_code=403,
+                    detail={
+                        "error": "feature_tier_required",
+                        "message": f"This feature requires the '{tier.value}' tier. Contact sales to upgrade.",
+                        "required_tier": tier.value,
+                        "current_tier": org_tier,
+                        "module": module,
+                    }
+                )
+
+    return _check

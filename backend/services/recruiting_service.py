@@ -161,7 +161,7 @@ class RecruitingService:
         offers_query = text("""
             SELECT COUNT(*) as count
             FROM mm_offers
-            WHERE status IN ('sent', 'viewed', 'negotiating')
+            WHERE status IN ('sent', 'viewed', 'negotiating', 'signed')
             AND organization_id = :org_id
         """)
         offers = self.db.execute(offers_query, {"org_id": organization_id}).fetchone()
@@ -620,7 +620,7 @@ class RecruitingService:
         if new_status in ("offer", "hired") and not skip_score_gate:
             from services.nmls_validation_service import NMLSValidationService
             nmls_service = NMLSValidationService(self.db)
-            nmls_result = nmls_service.check_license_status(candidate_id, organization_id)
+            nmls_result = await nmls_service.check_license_status(candidate_id, organization_id)
             if not nmls_result.is_valid:
                 issue_msgs = "; ".join(i["message"] for i in nmls_result.issues)
                 raise ValueError(f"NMLS validation failed: {issue_msgs}")
@@ -1135,7 +1135,7 @@ class RecruitingService:
                     responded_at = CURRENT_TIMESTAMP,
                     response_notes = :notes,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id AND status IN ('sent', 'viewed', 'negotiating')
+                WHERE id = :id AND status IN ('sent', 'viewed', 'negotiating', 'signed')
                 AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
                 {resp_org_filter}
                 RETURNING candidate_id, offer_number
@@ -1187,7 +1187,7 @@ class RecruitingService:
                     responded_at = CURRENT_TIMESTAMP,
                     declined_notes = :notes,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id AND status IN ('sent', 'viewed', 'negotiating') {resp_org_filter}
+                WHERE id = :id AND status IN ('sent', 'viewed', 'negotiating', 'signed') {resp_org_filter}
                 RETURNING candidate_id, offer_number
             """
             result = self.db.execute(text(query), resp_params_base).fetchone()

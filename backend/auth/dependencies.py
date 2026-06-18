@@ -11,22 +11,51 @@ Usage:
     async def my_endpoint(user = Depends(get_current_user)):
         ...
 
-NOTE: Uses lazy imports from main to avoid circular import at module load time.
-The functions themselves are resolved at request time (FastAPI dependency injection).
+The real function bodies live here; main.py re-exports them for back-compat.
 """
+import hashlib
 import hmac
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+from jwt.exceptions import InvalidTokenError
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from db import get_db
 
 logger = logging.getLogger(__name__)
 
 _security = HTTPBearer(auto_error=False)
+
+# oauth2_scheme — canonical instance used by get_current_user and re-exported to main.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# ---------------------------------------------------------------------------
+# Secure-token helpers — imported from auth.tokens at module load time.
+# If auth.tokens is unavailable we fall back to raw HS256.
+# ---------------------------------------------------------------------------
+try:
+    from auth.tokens import (
+        verify_token as _verify_secure_token,
+        token_blacklist,
+        TokenType,
+        is_token_blacklisted,
+    )
+    _USE_SECURE_TOKENS = True
+except ImportError:
+    _USE_SECURE_TOKENS = False
+    _verify_secure_token = None  # type: ignore[assignment]
+    token_blacklist = None       # type: ignore[assignment]
+    TokenType = None             # type: ignore[assignment]
+    is_token_blacklisted = None  # type: ignore[assignment]
+
+# Legacy HS256 constants (only used when _USE_SECURE_TOKENS is False)
+_SECRET_KEY = os.getenv("SECRET_KEY", "")
+_ALGORITHM = os.getenv("AUTH_ALGORITHM", "HS256")
 
 
 async def require_auth(
@@ -52,93 +81,327 @@ async def require_auth(
     return user
 
 
-def _get_main_auth():
-    """Lazy import auth functions from main.py to avoid circular imports."""
-    from main import (
-        get_current_user,
-        get_current_user_flexible,
-        oauth2_scheme,
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Get current user with impersonation support."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
     )
-    return get_current_user, get_current_user_flexible, oauth2_scheme
+
+    actual_user = None
+
+    # Lazy model import to avoid circular imports at module load time.
+    from database.models import User, ApiKey
+
+    # Check if token is an API key
+    if token.startswith('sk_') or token.startswith('pk_live_'):
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        api_key = db.query(ApiKey).filter(
+            ApiKey.key_hash == token_hash,
+            ApiKey.is_active == True
+        ).first()
+
+        if not api_key:
+            api_key = db.query(ApiKey).filter(
+                ApiKey.key == token,
+                ApiKey.is_active == True
+            ).first()
+            if api_key:
+                api_key = db.query(ApiKey).filter(
+                    ApiKey.id == api_key.id
+                ).with_for_update().first()
+                if api_key and api_key.key is not None:
+                    api_key.key_hash = token_hash
+                    api_key.key_prefix = token[:8]
+                    api_key.key = None
+                    db.commit()
+
+        if api_key is None:
+            raise credentials_exception
+
+        if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="API key has expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        api_key.last_used_at = datetime.now(timezone.utc)
+        db.commit()
+
+        actual_user = db.query(User).filter(User.id == api_key.user_id).first()
+        if actual_user is None:
+            raise credentials_exception
+
+        if request:
+            request.state._api_key_obj = api_key
+
+        if request and api_key.scopes:
+            try:
+                from auth.scope_enforcement import check_endpoint_scopes
+                if not check_endpoint_scopes(request, api_key.scopes):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="API key lacks required scope for this endpoint",
+                    )
+            except ImportError:
+                pass
+            except HTTPException:
+                raise
+
+    else:
+        if _USE_SECURE_TOKENS:
+            token_data = _verify_secure_token(token, expected_type=TokenType.ACCESS)
+            if not token_data:
+                raise credentials_exception
+            email = token_data.sub
+        else:
+            try:
+                _jwt_aud = os.getenv("JWT_AUDIENCE", "perennia-crm")
+                payload = jwt.decode(token, _SECRET_KEY, algorithms=[_ALGORITHM], audience=_jwt_aud, options={"verify_aud": True})
+                _expected_issuer = os.getenv("JWT_ISSUER", "perennia-api")
+                _token_issuer = payload.get("iss")
+                if _token_issuer and _token_issuer != _expected_issuer:
+                    logger.warning(f"JWT issuer mismatch: expected={_expected_issuer}, got={_token_issuer}")
+                    raise credentials_exception
+                email: str = payload.get("sub")
+                if email is None:
+                    raise credentials_exception
+                token_scope = payload.get("scope")
+                if token_scope in ("mfa_verify", "mfa_setup"):
+                    logger.warning(f"Rejected MFA scoped token ({token_scope}) used as access token for {email}")
+                    raise credentials_exception
+                jti = payload.get("jti")
+                if jti:
+                    try:
+                        from auth.tokens import is_token_blacklisted as _is_bl
+                        if _is_bl(jti):
+                            raise credentials_exception
+                    except ImportError:
+                        pass
+            except InvalidTokenError:
+                raise credentials_exception
+
+        actual_user = db.query(User).filter(User.email == email).first()
+        if actual_user is None:
+            raise credentials_exception
+
+        if not getattr(actual_user, "is_active", True):
+            raise HTTPException(status_code=401, detail="Account deactivated")
+        if getattr(actual_user, "locked_until", None) and actual_user.locked_until > datetime.now(timezone.utc):
+            raise HTTPException(status_code=401, detail="Account temporarily locked")
+
+    # Check for impersonation
+    actual_user = resolve_impersonation(request, actual_user, db)
+
+    # Update last_activity_at (throttled to every 5 minutes)
+    try:
+        now = datetime.now(timezone.utc)
+        if actual_user.last_activity_at is None or (now - actual_user.last_activity_at).total_seconds() > 300:
+            actual_user.last_activity_at = now
+            db.commit()
+    except Exception as e:
+        logger.debug(f"Failed to update last_activity_at: {e}")
+        db.rollback()
+
+    return actual_user
 
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Async FastAPI dependency — resolves to the authenticated User object.
+async def get_current_user_flexible(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Flexible authentication supporting Bearer token and X-API-Key header."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
-    Extracts the Bearer token from the Authorization header and delegates
-    to main.py's get_current_user for RS256 token verification.
+    token = None
 
-    Usage:
-        @router.get("/endpoint")
-        async def handler(user = Depends(get_current_user)):
-            ...
-    """
-    gcu, _, _ = _get_main_auth()
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await gcu(token, request, db)
+    # Lazy model import to avoid circular imports at module load time.
+    from database.models import User, ApiKey
 
+    # Check X-API-Key header first
+    api_key_header = request.headers.get("X-API-Key")
+    if api_key_header:
+        header_hash = hashlib.sha256(api_key_header.encode()).hexdigest()
+        api_key = db.query(ApiKey).filter(
+            ApiKey.key_hash == header_hash,
+            ApiKey.is_active == True
+        ).first()
 
-async def get_current_user_flexible(request: Request, db: Session = Depends(get_db)):
-    """Async FastAPI dependency — resolves to User via Bearer, API key, or cookie.
+        if not api_key:
+            api_key = db.query(ApiKey).filter(
+                ApiKey.key == api_key_header,
+                ApiKey.is_active == True
+            ).first()
+            if api_key:
+                api_key = db.query(ApiKey).filter(
+                    ApiKey.id == api_key.id
+                ).with_for_update().first()
+                if api_key and api_key.key is not None:
+                    api_key.key_hash = header_hash
+                    api_key.key_prefix = api_key_header[:8]
+                    api_key.key = None
+                    db.commit()
 
-    Usage:
-        @router.get("/endpoint")
-        async def handler(user = Depends(get_current_user_flexible)):
-            ...
-    """
-    _, gcuf, _ = _get_main_auth()
-    return await gcuf(request, db)
+        if api_key:
+            if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="API key has expired",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
+            api_key.last_used_at = datetime.now(timezone.utc)
+            db.commit()
+
+            if hasattr(request, 'state'):
+                request.state._api_key_obj = api_key
+
+            if api_key.scopes:
+                try:
+                    from auth.scope_enforcement import check_endpoint_scopes
+                    if not check_endpoint_scopes(request, api_key.scopes):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="API key lacks required scope for this endpoint",
+                        )
+                except ImportError:
+                    pass
+                except HTTPException:
+                    raise
+
+            if api_key.organization_id:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, api_key.organization_id)
+                logger.info(f"API key tenant context set to org {api_key.organization_id}")
+
+            actual_user = db.query(User).filter(User.id == api_key.user_id).first()
+            if actual_user:
+                return resolve_impersonation(request, actual_user, db, auth_method="API key")
+
+        raise credentials_exception
+
+    # Check Authorization header
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.replace("Bearer ", "")
+
+    if not token:
+        raise credentials_exception
+
+    # Check if token is an API key in Bearer header
+    if token.startswith('sk_') or token.startswith('pk_live_'):
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        api_key = db.query(ApiKey).filter(
+            ApiKey.key_hash == token_hash,
+            ApiKey.is_active == True
+        ).first()
+
+        if not api_key:
+            api_key = db.query(ApiKey).filter(
+                ApiKey.key == token,
+                ApiKey.is_active == True
+            ).first()
+            if api_key:
+                api_key = db.query(ApiKey).filter(
+                    ApiKey.id == api_key.id
+                ).with_for_update().first()
+                if api_key and api_key.key is not None:
+                    api_key.key_hash = token_hash
+                    api_key.key_prefix = token[:8]
+                    api_key.key = None
+                    db.commit()
+
+        if api_key is None:
+            raise credentials_exception
+
+        if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="API key has expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        api_key.last_used_at = datetime.now(timezone.utc)
+        db.commit()
+
+        if hasattr(request, 'state'):
+            request.state._api_key_obj = api_key
+
+        if api_key.scopes:
+            try:
+                from auth.scope_enforcement import check_endpoint_scopes
+                if not check_endpoint_scopes(request, api_key.scopes):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="API key lacks required scope for this endpoint",
+                    )
+            except ImportError:
+                pass
+            except HTTPException:
+                raise
+
+        actual_user = db.query(User).filter(User.id == api_key.user_id).first()
+        if actual_user is None:
+            raise credentials_exception
+
+        return resolve_impersonation(request, actual_user, db, auth_method="Bearer API key")
+
+    # JWT token
+    if _USE_SECURE_TOKENS:
+        token_data = _verify_secure_token(token, expected_type=TokenType.ACCESS)
+        if not token_data:
+            raise credentials_exception
+        email = token_data.sub
+    else:
+        try:
+            _jwt_aud = os.getenv("JWT_AUDIENCE", "perennia-crm")
+            payload = jwt.decode(token, _SECRET_KEY, algorithms=[_ALGORITHM], audience=_jwt_aud, options={"verify_aud": True})
+            _expected_issuer = os.getenv("JWT_ISSUER", "perennia-api")
+            _token_issuer = payload.get("iss")
+            if _token_issuer and _token_issuer != _expected_issuer:
+                logger.warning(f"JWT issuer mismatch: expected={_expected_issuer}, got={_token_issuer}")
+                raise credentials_exception
+            email: str = payload.get("sub")
+            if email is None:
+                raise credentials_exception
+            token_scope = payload.get("scope")
+            if token_scope in ("mfa_verify", "mfa_setup"):
+                logger.warning(f"Rejected MFA scoped token ({token_scope}) used as access token for {email}")
+                raise credentials_exception
+        except InvalidTokenError:
+            raise credentials_exception
+
+    actual_user = db.query(User).filter(User.email == email).first()
+    if actual_user is None:
+        raise credentials_exception
+
+    if not getattr(actual_user, "is_active", True):
+        raise HTTPException(status_code=401, detail="Account deactivated")
+    if getattr(actual_user, "locked_until", None) and actual_user.locked_until > datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Account temporarily locked")
+
+    # Check for impersonation
+    return resolve_impersonation(request, actual_user, db, auth_method="flexible")
 
 
 def get_oauth2_scheme():
-    """Return the canonical oauth2_scheme from main.py."""
-    _, _, scheme = _get_main_auth()
-    return scheme
+    """Return the canonical oauth2_scheme."""
+    return oauth2_scheme
 
 
-# For direct Depends() usage without calling the function:
-#   from auth.dependencies import current_user_dep
-#   async def handler(user = Depends(current_user_dep)):
-#
-# These are properties that resolve at import time of the ROUTE module,
-# but since routes are imported after main.py is loaded, this is safe.
-
-class _LazyAuthProxy:
-    """Proxy that lazily resolves auth dependencies on first access.
-
-    This avoids circular imports while still allowing route files to do:
-        from auth.dependencies import current_user_dep
-        @router.get("/x")
-        async def handler(user = Depends(current_user_dep)): ...
-    """
-
-    def __init__(self, attr_name):
-        self._attr_name = attr_name
-        self._resolved = None
-
-    def _resolve(self):
-        if self._resolved is None:
-            gcu, gcuf, scheme = _get_main_auth()
-            _resolved_map = {
-                'get_current_user': gcu,
-                'get_current_user_flexible': gcuf,
-                'oauth2_scheme': scheme,
-            }
-            self._resolved = _resolved_map[self._attr_name]
-        return self._resolved
-
-    def __call__(self, *args, **kwargs):
-        return self._resolve()(*args, **kwargs)
-
-    def __repr__(self):
-        return f"<LazyAuthProxy({self._attr_name})>"
-
-
-# Lazy proxies that resolve on first call (compatible with Depends())
-current_user_dep = _LazyAuthProxy('get_current_user')
-current_user_flexible_dep = _LazyAuthProxy('get_current_user_flexible')
-oauth2_scheme = _LazyAuthProxy('oauth2_scheme')
+# Aliases for Depends() usage — these are the real functions now, no proxy needed.
+current_user_dep = get_current_user
+current_user_flexible_dep = get_current_user_flexible
 
 
 # ---------------------------------------------------------------------------
@@ -224,8 +487,7 @@ async def get_current_user_or_api_key(
         # try the normal user resolution.
         if token.count(".") == 2 and len(token) > 50:
             try:
-                gcu, _, _ = _get_main_auth()
-                user = await gcu(token, request, db)
+                user = await get_current_user(token, request, db)
                 if user:
                     return user
             except Exception:

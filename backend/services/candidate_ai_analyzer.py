@@ -87,6 +87,16 @@ class AIAnalysisResult:
     # Raw data for debugging
     raw_analysis: Dict[str, Any] = field(default_factory=dict)
 
+    # EEOC / compliance guardrails — always set, never suppressed
+    eeoc_disclaimer: str = (
+        "AI scoring is advisory only. Final hiring decisions must be made by a human "
+        "reviewer. This tool has not been validated for adverse impact on protected classes."
+    )
+    requires_human_review: bool = True
+    # True = show recommendation as advisory label only, not a direct action button.
+    # Orgs that have not explicitly enabled AI decisioning default to advisory mode.
+    ai_recommendation_locked: bool = True
+
     def to_dict(self) -> Dict[str, Any]:
         result = asdict(self)
         result['analyzed_at'] = self.analyzed_at.isoformat()
@@ -762,6 +772,29 @@ Be thorough but objective. Base scores only on available evidence. If data is li
         # Recommendation
         result.hire_recommendation = analysis_data.get("hire_recommendation", "maybe")
         result.recommendation_reasoning = analysis_data.get("recommendation_reasoning", "")
+
+        # EEOC guardrails: always advisory unless org has explicitly enabled AI decisioning.
+        # Check org settings via db if available; default to locked (advisory-only).
+        ai_decisioning_enabled = False
+        if self.db is not None:
+            try:
+                from sqlalchemy import text as _text
+                # org_settings JSONB field — look for {"ai_decisioning_enabled": true}
+                row = self.db.execute(_text("""
+                    SELECT settings->>'ai_decisioning_enabled' AS ai_enabled
+                    FROM organizations
+                    WHERE id = (
+                        SELECT organization_id FROM mm_candidates WHERE id = :cid LIMIT 1
+                    )
+                """), {"cid": result.candidate_id}).fetchone()
+                if row and row.ai_enabled == "true":
+                    ai_decisioning_enabled = True
+            except Exception:
+                pass  # any failure → stay locked
+
+        result.ai_recommendation_locked = not ai_decisioning_enabled
+        result.requires_human_review = True
+        # eeoc_disclaimer is already set by the dataclass default
 
         return result
 

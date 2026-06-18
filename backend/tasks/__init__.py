@@ -56,7 +56,6 @@ from .calendar_sync_tasks import (
     reconcile_calendar_sync,
     check_sync_health,
     check_sync_health_sync,
-    register_calendar_sync_jobs
 )
 
 from .salesforce_sync_tasks import (
@@ -122,7 +121,6 @@ __all__ = [
     "reconcile_calendar_sync",
     "check_sync_health",
     "check_sync_health_sync",
-    "register_calendar_sync_jobs",
     # Salesforce sync - Email
     "sync_emails_from_salesforce",
     "sync_emails_from_salesforce_sync",

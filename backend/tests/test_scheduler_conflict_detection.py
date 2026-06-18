@@ -370,15 +370,15 @@ class TestCheckAppointmentConflict:
 
         return db
 
-    def test_no_conflict_passes(self):
+    async def test_no_conflict_passes(self):
         """When no conflicting row exists, function returns without error."""
         db = self._setup(query_result=None)
         # Should not raise
-        _check_appointment_conflict(db, assigned_user_id=1,
+        await _check_appointment_conflict(db, assigned_user_id=1,
                                      start_time=_dt(10), end_time=_dt(10, 30),
                                      org_id=1)
 
-    def test_overlapping_appointment_raises_409(self):
+    async def test_overlapping_appointment_raises_409(self):
         """When an overlapping appointment exists, HTTPException 409 is raised."""
         existing = _make_mock_appointment(
             scheduled_start=_dt(10), scheduled_end=_dt(10, 30)
@@ -386,29 +386,29 @@ class TestCheckAppointmentConflict:
         db = self._setup(query_result=existing)
 
         with pytest.raises(HTTPException) as exc_info:
-            _check_appointment_conflict(db, assigned_user_id=1,
+            await _check_appointment_conflict(db, assigned_user_id=1,
                                          start_time=_dt(10, 15), end_time=_dt(10, 45),
                                          org_id=1)
         assert exc_info.value.status_code == 409
         assert "no longer available" in exc_info.value.detail
 
-    def test_locked_row_raises_409(self):
+    async def test_locked_row_raises_409(self):
         """When the row is locked (OperationalError), HTTPException 409 is raised."""
         db = self._setup(raise_operational_error=True)
 
         with pytest.raises(HTTPException) as exc_info:
-            _check_appointment_conflict(db, assigned_user_id=1,
+            await _check_appointment_conflict(db, assigned_user_id=1,
                                          start_time=_dt(10), end_time=_dt(10, 30),
                                          org_id=1)
         assert exc_info.value.status_code == 409
         assert "being booked by another user" in exc_info.value.detail
 
-    def test_exclude_appointment_id_allows_self(self):
+    async def test_exclude_appointment_id_allows_self(self):
         """When rescheduling, the current appointment should be excluded from conflict check."""
         db = self._setup(query_result=None)
         # The exclude_appointment_id is passed through to the filter.
         # Since our mock returns None, the function should succeed.
-        _check_appointment_conflict(db, assigned_user_id=1,
+        await _check_appointment_conflict(db, assigned_user_id=1,
                                      start_time=_dt(10), end_time=_dt(10, 30),
                                      org_id=1, exclude_appointment_id=42)
 
@@ -471,7 +471,7 @@ class TestConfirmationTimeConflicts:
     stale slot selections.
     """
 
-    def test_new_event_between_slot_and_confirm_blocked(self):
+    async def test_new_event_between_slot_and_confirm_blocked(self):
         """
         If a new event appears between slot display and confirmation,
         _check_appointment_conflict should reject the booking.
@@ -483,7 +483,7 @@ class TestConfirmationTimeConflicts:
         # Phase 1: slots generated -- no conflicts
         db_phase1 = MagicMock()
         db_phase1.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
-        _check_appointment_conflict(db_phase1, assigned_user_id=1,
+        await _check_appointment_conflict(db_phase1, assigned_user_id=1,
                                      start_time=_dt(10), end_time=_dt(10, 30), org_id=1)
 
         # Phase 2: between display and confirmation, another booking lands
@@ -494,11 +494,11 @@ class TestConfirmationTimeConflicts:
         db_phase2.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = existing
 
         with pytest.raises(HTTPException) as exc_info:
-            _check_appointment_conflict(db_phase2, assigned_user_id=1,
+            await _check_appointment_conflict(db_phase2, assigned_user_id=1,
                                          start_time=_dt(10), end_time=_dt(10, 30), org_id=1)
         assert exc_info.value.status_code == 409
 
-    def test_concurrent_booking_race_condition(self):
+    async def test_concurrent_booking_race_condition(self):
         """
         Two users booking the same slot simultaneously: the second transaction
         should hit a row lock (OperationalError) and get a 409.
@@ -512,7 +512,7 @@ class TestConfirmationTimeConflicts:
         # First caller succeeds (no conflict found)
         db_caller1 = MagicMock()
         db_caller1.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
-        _check_appointment_conflict(db_caller1, assigned_user_id=1,
+        await _check_appointment_conflict(db_caller1, assigned_user_id=1,
                                      start_time=_dt(14), end_time=_dt(14, 30), org_id=1)
 
         # Second caller hits the row lock
@@ -521,7 +521,7 @@ class TestConfirmationTimeConflicts:
             OperationalError("could not obtain lock", {}, None)
         )
         with pytest.raises(HTTPException) as exc_info:
-            _check_appointment_conflict(db_caller2, assigned_user_id=1,
+            await _check_appointment_conflict(db_caller2, assigned_user_id=1,
                                          start_time=_dt(14), end_time=_dt(14, 30), org_id=1)
         assert exc_info.value.status_code == 409
         assert "being booked by another user" in exc_info.value.detail

@@ -287,15 +287,16 @@ class TestPublicBookingE2E:
 
         # Step 4: Simulate slot generation - verify no conflict check blocks booking
         from scheduler_appointment_routes import _check_appointment_conflict
+        import asyncio
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
         # Should not raise
-        _check_appointment_conflict(
+        asyncio.run(_check_appointment_conflict(
             mock_db,
             assigned_user_id=10,
             start_time=datetime(2026, 3, 15, 10, 0),
             end_time=datetime(2026, 3, 15, 10, 30),
             org_id=1,
-        )
+        ))
 
         # Step 5: Duplicate check passes
         from scheduler_appointment_routes import _check_duplicate_booking
@@ -600,14 +601,15 @@ class TestAppointmentLifecycleE2E:
 
         # Slot should now be freed (conflict check returns None for cancelled)
         from scheduler_appointment_routes import _check_appointment_conflict
+        import asyncio
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
         # Should not raise - the slot is available
-        _check_appointment_conflict(
+        asyncio.run(_check_appointment_conflict(
             mock_db, assigned_user_id=10,
             start_time=sample_appointment.scheduled_start,
             end_time=sample_appointment.scheduled_end,
             org_id=1,
-        )
+        ))
 
     def test_complete_appointment(self, mock_db, mock_models, sample_appointment):
         """Showed -> complete -> follow-up tasks created."""
@@ -682,13 +684,14 @@ class TestConflictPreventionE2E:
         from fastapi import HTTPException
 
         # First booking succeeds (no existing conflict)
+        import asyncio
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
-        _check_appointment_conflict(
+        asyncio.run(_check_appointment_conflict(
             mock_db, assigned_user_id=10,
             start_time=datetime(2026, 3, 15, 10, 0),
             end_time=datetime(2026, 3, 15, 10, 30),
             org_id=1,
-        )
+        ))
 
         # Second booking finds the first one as a conflict
         existing_conflict = MagicMock()
@@ -698,12 +701,12 @@ class TestConflictPreventionE2E:
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = existing_conflict
 
         with pytest.raises(HTTPException) as exc_info:
-            _check_appointment_conflict(
+            asyncio.run(_check_appointment_conflict(
                 mock_db, assigned_user_id=10,
                 start_time=datetime(2026, 3, 15, 10, 0),
                 end_time=datetime(2026, 3, 15, 10, 30),
                 org_id=1,
-            )
+            ))
         assert exc_info.value.status_code == 409
         assert "no longer available" in exc_info.value.detail
 
@@ -894,14 +897,15 @@ class TestTeamReassignmentE2E:
 
         # Check no conflict for LO B at the same time
         from scheduler_appointment_routes import _check_appointment_conflict
+        import asyncio
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
 
-        _check_appointment_conflict(
+        asyncio.run(_check_appointment_conflict(
             mock_db, assigned_user_id=20,  # LO B
             start_time=sample_appointment.scheduled_start,
             end_time=sample_appointment.scheduled_end,
             org_id=1,
-        )
+        ))
 
         # Reassign
         sample_appointment.assigned_user_id = 20
@@ -933,6 +937,7 @@ class TestTeamReassignmentE2E:
 
         from scheduler_appointment_routes import _check_appointment_conflict
         from fastapi import HTTPException
+        import asyncio
 
         # LO B has a conflicting appointment
         conflict = MagicMock()
@@ -940,12 +945,12 @@ class TestTeamReassignmentE2E:
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = conflict
 
         with pytest.raises(HTTPException) as exc_info:
-            _check_appointment_conflict(
+            asyncio.run(_check_appointment_conflict(
                 mock_db, assigned_user_id=20,
                 start_time=datetime(2026, 3, 15, 10, 0),
                 end_time=datetime(2026, 3, 15, 10, 30),
                 org_id=1,
-            )
+            ))
         assert exc_info.value.status_code == 409
 
 
