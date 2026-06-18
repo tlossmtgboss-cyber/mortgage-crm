@@ -1016,6 +1016,7 @@ def _run_critical_schema_migrations():
             ("mfa_enabled_at", "TIMESTAMP"),
             ("sso_provider", "VARCHAR(50)"),
             ("sso_subject_id", "VARCHAR(255)"),
+            ("password_changed_at", "TIMESTAMP WITH TIME ZONE"),
         ]
         u_added = 0
         for col_name, col_type in users_columns:

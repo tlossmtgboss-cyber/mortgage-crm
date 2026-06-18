@@ -299,6 +299,7 @@ def upgrade() -> None:
         ("mfa_enabled_at", "TIMESTAMP"),
         ("sso_provider", "VARCHAR(50)"),
         ("sso_subject_id", "VARCHAR(255)"),
+        ("password_changed_at", "TIMESTAMP WITH TIME ZONE"),
     ]
     for col_name, col_type in _users_columns:
         op.execute(

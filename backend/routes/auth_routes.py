@@ -31,7 +31,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
-from sqlalchemy.exc import OperationalError, InterfaceError
+from sqlalchemy.exc import OperationalError, InterfaceError, ProgrammingError
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
 
@@ -809,7 +809,7 @@ async def _login_impl(http_request: Request, form_data, db: Session, _is_retry: 
         }
     except HTTPException:
         raise
-    except (OperationalError, InterfaceError) as e:
+    except (OperationalError, InterfaceError, ProgrammingError) as e:
         import traceback
         tb_str = traceback.format_exc()
         attempt_label = "retry" if _is_retry else "attempt 1"
