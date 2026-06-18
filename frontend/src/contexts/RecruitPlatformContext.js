@@ -24,11 +24,15 @@ export function RecruitPlatformProvider({ children }) {
     const response = await fetch('/api/v1/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ x1: email, x2: password }),
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || 'Invalid email or password');
+      const detail = err.detail;
+      const message = Array.isArray(detail)
+        ? (detail[0]?.msg || 'Invalid email or password')
+        : (typeof detail === 'string' ? detail : 'Invalid email or password');
+      throw new Error(message);
     }
     const data = await response.json();
     const token = data.access_token;
