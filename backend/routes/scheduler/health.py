@@ -389,16 +389,14 @@ def _check_calendar_providers(db: Session, org_id: int) -> dict:
             if rec.last_sync_status == "error" or rec.sync_error:
                 errored += 1
 
-            # Check token expiry (expired or expiring within 1 hour)
+            # Check token expiry (expired or expiring within 1 hour).
+            # NULL token_expires_at means no expiry tracked — do not count as expiring.
             if rec.token_expires_at is not None:
                 expires = rec.token_expires_at
                 if expires.tzinfo is None:
                     expires = expires.replace(tzinfo=timezone.utc)
                 if expires <= token_expiry_threshold:
                     tokens_expiring += 1
-            else:
-                # No expiry recorded -- flag as expiring to be safe
-                tokens_expiring += 1
 
         healthy = total - max(stale, errored)
         if healthy < 0:

@@ -13,10 +13,11 @@ logger = logging.getLogger(__name__)
 INDEX_NAME = "idx_appointment_active"
 TABLE_NAME = "scheduler_appointments"
 
+# Applied migration fix: status literals normalized to lowercase
 DDL = (
     f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {INDEX_NAME} "
     f"ON {TABLE_NAME} (organization_id, assigned_user_id, scheduled_start) "
-    f"WHERE status NOT IN ('CANCELLED', 'NO_SHOW', 'cancelled', 'no_show')"
+    f"WHERE status NOT IN ('cancelled', 'no_show')"
 )
 
 

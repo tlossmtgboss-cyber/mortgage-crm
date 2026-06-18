@@ -834,20 +834,6 @@ def _generate_available_slots(
     by this slot generator, but the settings UI may still display/edit the JSON blob
     without the user realizing it has no effect on slot generation.
     """
-    # Lightweight cleanup: expire any stale active SlotHold records so they
-    # don't phantom-block slots.  This is a single UPDATE on an indexed column
-    # and adds negligible latency.  See H9 in challenge audit.
-    try:
-        from routes.scheduler.maintenance import auto_cleanup_expired_holds
-        auto_cleanup_expired_holds(db)
-    except Exception:
-        # Rollback to clear any failed transaction state from missing tables
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        logger.debug("SlotHold auto-cleanup skipped (non-critical)", exc_info=True)
-
     _models = get_models()
     SchedulerConfig = _models.get('SchedulerConfig') if _models else None
     BlockedTime = _models.get('BlockedTime') if _models else None

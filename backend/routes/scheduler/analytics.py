@@ -528,17 +528,30 @@ async def analytics_by_lo(
         raise HTTPException(status_code=503, detail="Scheduler models not available")
 
     # Admins see all LOs; branch managers see their direct reports; others are blocked
+    is_admin = _is_scheduler_admin(current_user)
+    is_manager = _is_branch_manager(current_user)
+    if not is_admin and not is_manager:
+        raise HTTPException(status_code=403, detail="Admin or branch manager access required for team analytics")
+
+    # Build cache key before the DB-heavy _get_managed_user_ids call
+    # (manager scoping baked in via user id; org-wide requests use user_id=0)
+    cache_key = _analytics_cache_key(
+        org_id, "by_lo", period=period, user_id=current_user.id if is_manager else 0,
+        page=page, page_size=page_size,
+    )
+    cached = _analytics_cache_get(cache_key)
+    if cached is not None:
+        return AnalyticsByLO(**cached)
+
+    # Cache miss — resolve effective user scope (2 DB queries for managers)
     effective_user_ids = None
-    if _is_scheduler_admin(current_user):
-        effective_user_ids = None  # org-wide
-    elif _is_branch_manager(current_user):
+    if is_manager:
         managed = _get_managed_user_ids(current_user.id, org_id, db)
         effective_user_ids = [int(uid) for uid in managed]
-    else:
-        raise HTTPException(status_code=403, detail="Admin or branch manager access required for team analytics")
 
     try:
         data = get_by_lo_breakdown(db, models, org_id, period=period, user_ids=effective_user_ids)
+        _analytics_cache_set(cache_key, data)
         all_los = data.get("loan_officers", [])
         total_count = len(all_los)
         total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
