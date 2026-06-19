@@ -23,6 +23,15 @@ CIE_TABLES = ["cie_call_records", "cie_intelligence_reports"]
 def upgrade():
     bind = op.get_bind()
 
+    # Guard: skip if tables already exist (init_db.py may have created them).
+    for _t in CIE_TABLES:
+        row = bind.execute(sa.text(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = 'public' AND table_name = :t"
+        ), {"t": _t}).fetchone()
+        if row:
+            return  # tables already present — nothing to do
+
     # --- cie_call_records -------------------------------------------------
     op.create_table(
         "cie_call_records",
