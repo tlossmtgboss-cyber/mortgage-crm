@@ -317,6 +317,7 @@ const InterviewCalendar = lazyRetry(() => import('../pages/RecruitingPlatform/In
 const MilestonesBoard = lazyRetry(() => import('../pages/RecruitingPlatform/MilestonesBoard'));
 const CandidateBookingPage = lazyRetry(() => import('../pages/RecruitingPlatform/CandidateBookingPage'));
 const RecruitInterviewCalendar = lazyRetry(() => import('../pages/RecruitPlatform/RecruitInterviewCalendar'));
+const RecruitCalendar = lazyRetry(() => import('../pages/RecruitPlatform/RecruitCalendar'));
 
 // Recruit Platform — standalone recruiting app (recruit.perenniaai.com)
 const RecruitLogin = lazyRetry(() => import('../pages/RecruitPlatform/Login'));
@@ -912,6 +913,7 @@ export function getRoutes(layoutProps, options = {}) {
     }>
       <Route path="dashboard" element={<Suspense fallback={<PageLoader />}><RecruitDashboard /></Suspense>} />
       <Route path="jobs" element={<Suspense fallback={<PageLoader />}><RecruitJobs /></Suspense>} />
+      <Route path="calendar" element={<Suspense fallback={<PageLoader />}><RecruitCalendar /></Suspense>} />
       <Route path="interviews" element={<Suspense fallback={<PageLoader />}><RecruitInterviewCalendar /></Suspense>} />
       <Route path="license-manager" element={<Suspense fallback={<PageLoader />}><LicenseManager /></Suspense>} />
       <Route path="website-builder" element={<Suspense fallback={<PageLoader />}><RecruitWebsiteBuilder /></Suspense>} />
