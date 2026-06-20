@@ -435,7 +435,11 @@ def seed_callcenter_page(
             INSERT INTO recruit_landing_pages
                 (organization_id, title, slug, status, config, created_by)
             VALUES (:oid, :title, :slug, 'published', CAST(:config AS jsonb), :uid)
-            ON CONFLICT (organization_id, slug) DO NOTHING
+            ON CONFLICT (organization_id, slug)
+            DO UPDATE SET
+                config = CAST(EXCLUDED.config AS jsonb),
+                status = 'published',
+                updated_at = NOW()
             RETURNING id, title, slug, status
         """), {
             "oid": org_id,
@@ -448,9 +452,7 @@ def seed_callcenter_page(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-    if row:
-        return {"seeded": True, "page": {"id": row[0], "title": row[1], "slug": row[2]}}
-    return {"seeded": False, "reason": "Already exists"}
+    return {"seeded": True, "page": {"id": row[0], "title": row[1], "slug": row[2]}}
 
 
 # ---------------------------------------------------------------------------
