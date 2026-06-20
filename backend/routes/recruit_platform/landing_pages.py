@@ -501,6 +501,7 @@ def admin_seed_callcenter(x_admin_key: str = Header(...)):
 # Public endpoints
 # ---------------------------------------------------------------------------
 
+@landing_pages_public_router.get("/careers/{slug}")
 @landing_pages_public_router.get("/p/{slug}")
 def serve_landing_page(slug: str, db: Session = Depends(get_db)):
     row = db.execute(
