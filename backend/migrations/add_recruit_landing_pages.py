@@ -19,7 +19,7 @@ _CALLCENTER_CONFIG = {
     "primary_color_dark": "#578F1E",
     "primary_color_pale": "#EFF7E1",
     "hero_headline": 'Build a <span class="red">six-figure</span><br>mortgage career<br>from <span class="italic">day one.</span>',
-    "hero_subheadline": "No mortgage experience required. CMG Home Loans's Charleston, SC team is recruiting driven, coachable people ready to earn what they're worth in one of America's most resilient industries.",
+    "hero_subheadline": '<p class="hero-sub">CMG Financial is a nationally recognized mortgage lender that specializes in home purchase and refinance needs. Since 1993, we\'ve been closing loans and opening doors of opportunity for our clients, partners, and employees.</p><p class="hero-sub">When you join team CMG, you don\'t just “start another job.” You join a culture of education, collaboration, and celebration. You join a group of <span style="color:#8ec94a;font-weight:600">leaders who advocate</span> for a better industry. You join a culture that <span style="color:#8ec94a;font-weight:600">cares</span> more about the world around us.</p><p class="hero-sub">And you join a family that cares about <strong>YOU.</strong></p>',
     "signing_bonus": "",
     "signing_bonus_month": "",
     "signing_bonus_deadline": "",
@@ -123,7 +123,11 @@ def run_migration(engine=None) -> None:
                         INSERT INTO recruit_landing_pages
                             (organization_id, title, slug, status, config)
                         VALUES (:org_id, :title, :slug, :status, CAST(:config AS jsonb))
-                        ON CONFLICT (organization_id, slug) DO NOTHING
+                        ON CONFLICT (organization_id, slug)
+                        DO UPDATE SET
+                            config = CAST(EXCLUDED.config AS jsonb),
+                            status = 'published',
+                            updated_at = NOW()
                     """), {
                         "org_id": org_id,
                         "title": "Call Center — SC",

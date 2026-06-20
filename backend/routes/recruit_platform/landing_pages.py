@@ -142,6 +142,7 @@ def _render(config: dict, org_slug: str, page_slug: str) -> str:
         "{{COMPANY_NMLS_ID}}": config.get("company_nmls_id", ""),
         "{{LOCATION_DISPLAY}}": config.get("location_display", ""),
         "{{HERO_HEADLINE}}": config.get("hero_headline", ""),
+        "{{HERO_SUBHEADLINE}}": config.get("hero_subheadline", ""),
         "{{HERO_HEADLINE_PLAIN}}": config.get("hero_headline_plain", config.get("hero_headline", "")),
         "{{SIGNING_BONUS}}": config.get("signing_bonus", ""),
         "{{SIGNING_BONUS_AMOUNT}}": config.get("signing_bonus_amount", ""),
