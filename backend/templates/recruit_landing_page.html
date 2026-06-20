@@ -911,6 +911,48 @@
     margin-top: 5px;
   }
 
+  .awards-strip {
+    background: white;
+    border-top: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--gray-200);
+    padding: 32px 0;
+  }
+  .awards-strip-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+  .awards-strip-eyebrow {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--gray-400);
+    margin-bottom: 24px;
+  }
+  .awards-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px 24px;
+  }
+  .award-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--cmg-navy);
+    white-space: nowrap;
+  }
+  .award-badge .aw-icon { font-size: 16px; }
+  .award-badge .aw-source { font-weight: 400; color: var(--gray-500); font-size: 11px; display: block; margin-top: 1px; }
+
   .benefits-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -2371,6 +2413,19 @@
     <p>Tools, leads, coaching, and culture. Here's why CMG loan officers outperform the market — and why they stay.</p>
   </div>
 
+  <div class="awards-strip">
+    <div class="awards-strip-inner">
+      <div class="awards-strip-eyebrow">Recognized nationally — trusted locally since 1993</div>
+      <div class="awards-row">
+        <div class="award-badge"><span class="aw-icon">⭐</span><span>4.3 / 5.0 Rating<span class="aw-source">Glassdoor · 154 reviews</span></span></div>
+        <div class="award-badge"><span class="aw-icon">🏆</span><span>Most Loved Mortgage Employer<span class="aw-source">National Mortgage Professional</span></span></div>
+        <div class="award-badge"><span class="aw-icon">🥇</span><span>Top Overall Lender<span class="aw-source">U.S. News &amp; World Report</span></span></div>
+        <div class="award-badge"><span class="aw-icon">🎓</span><span>RISE Award for Education<span class="aw-source">Freddie Mac</span></span></div>
+        <div class="award-badge"><span class="aw-icon">🏅</span><span>Top Rated Lender<span class="aw-source">Business Insider</span></span></div>
+      </div>
+    </div>
+  </div>
+
   <div class="section">
     <div class="pillars-grid">
       <div class="pillar">
@@ -2476,6 +2531,20 @@
             <p>Top performers work 2–3 days remote after completing their first full year. Earn the flexibility.</p>
           </div>
         </div>
+        <div class="benefit">
+          <div class="benefit-icon">💪</div>
+          <div>
+            <h4>Fitness &amp; Wellness Perks</h4>
+            <p>Unlimited Orangetheory Fitness sessions and a 24 Hour Fitness corporate plan — CMG invests in you beyond the office.</p>
+          </div>
+        </div>
+        <div class="benefit">
+          <div class="benefit-icon">🐾</div>
+          <div>
+            <h4>Pet Insurance + Employee Discounts</h4>
+            <p>Pet insurance coverage plus Working Advantage travel and entertainment discounts — benefits that cover your whole life.</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -2506,6 +2575,16 @@
         <div class="culture-card-icon">🌎</div>
         <h4>Diverse and SC-rooted</h4>
         <p>We hire from the communities we serve. Understanding our borrowers is competitive advantage.</p>
+      </div>
+      <div class="culture-card">
+        <div class="culture-card-icon">🚀</div>
+        <h4>CMG Advance — Mentorship Program</h4>
+        <p>A formal mentorship and training track pairing new LOs with top producers for accelerated career growth.</p>
+      </div>
+      <div class="culture-card">
+        <div class="culture-card-icon">💡</div>
+        <h4>Leap Frog to Leadership</h4>
+        <p>CMG's idea-sharing program where frontline employees pitch process improvements directly to leadership — and get credit when they're implemented.</p>
       </div>
     </div>
   </div>
