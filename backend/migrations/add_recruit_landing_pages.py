@@ -19,7 +19,7 @@ _CALLCENTER_CONFIG = {
     "primary_color_dark": "#578F1E",
     "primary_color_pale": "#EFF7E1",
     "hero_headline": 'Build a <span class="red">six-figure</span><br>mortgage career<br>from <span class="italic">day one.</span>',
-    "hero_subheadline": "No mortgage experience required. CMG Home Loans South Carolina call center is recruiting driven, coachable people ready to earn what they're worth in one of America's most resilient industries.",
+    "hero_subheadline": "No mortgage experience required. CMG Home Loans's Charleston, SC team is recruiting driven, coachable people ready to earn what they're worth in one of America's most resilient industries.",
     "signing_bonus": "$2,500",
     "signing_bonus_month": "July",
     "signing_bonus_deadline": "July 31st",

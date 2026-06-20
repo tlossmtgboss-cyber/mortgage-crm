@@ -481,7 +481,11 @@ def admin_seed_callcenter(x_admin_key: str = Header(...)):
                         INSERT INTO recruit_landing_pages
                             (organization_id, title, slug, status, config)
                         VALUES (:oid, :title, :slug, 'published', CAST(:cfg AS jsonb))
-                        ON CONFLICT (organization_id, slug) DO NOTHING
+                        ON CONFLICT (organization_id, slug)
+                        DO UPDATE SET
+                            config = CAST(EXCLUDED.config AS jsonb),
+                            status = 'published',
+                            updated_at = NOW()
                         RETURNING id
                     """), {"oid": org_id, "title": "Call Center — SC",
                            "slug": "callcenter", "cfg": _json.dumps(_CALLCENTER_CONFIG)}).fetchone()
