@@ -519,6 +519,16 @@ async def get_all_integrations(
                 except Exception as e:
                     logger.warning(f"Error checking integration_profiles: {e}")
 
+                # Check for Follow Up Boss connections
+                try:
+                    fub_result = db.execute(text("""
+                        SELECT 1 FROM fub_user_connections WHERE user_id = :user_id LIMIT 1
+                    """), {"user_id": int(user_id)}).fetchone()
+                    if fub_result:
+                        connected_providers.add("followupboss")
+                except Exception as e:
+                    logger.warning(f"Error checking fub_user_connections: {e}")
+
             except SQLAlchemyError as e:
                 logger.warning(f"Could not fetch connected integrations: {e}")
 
@@ -609,6 +619,20 @@ async def get_integration(
                     connected_email = result[0] if result[0] else None
             except SQLAlchemyError as e:
                 logger.warning(f"Could not check integration status: {e}")
+
+            # Follow Up Boss uses its own connections table
+            if not is_connected and integration_id == "followupboss":
+                try:
+                    from sqlalchemy import text as sa_text
+                    fub_row = db.execute(sa_text("""
+                        SELECT fub_user_email FROM fub_user_connections
+                        WHERE user_id = :user_id LIMIT 1
+                    """), {"user_id": int(user_id)}).fetchone()
+                    if fub_row:
+                        is_connected = True
+                        connected_email = fub_row[0]
+                except Exception as e:
+                    logger.warning(f"Error checking fub_user_connections for detail: {e}")
 
         integration["status"] = "connected" if is_connected else "disconnected"
         integration["connected_email"] = connected_email
