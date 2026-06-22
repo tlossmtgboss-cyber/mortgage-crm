@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 _CALLCENTER_CONFIG = {
     "page_title": "Careers | CMG Home Loans — South Carolina",
     "company_name": "CMG Home Loans",
-    "location_display": "Charleston & Columbia, SC",
+    "location_display": "Charleston, SC",
     "primary_color": "#6AAA26",
     "primary_color_dark": "#578F1E",
     "primary_color_pale": "#EFF7E1",
