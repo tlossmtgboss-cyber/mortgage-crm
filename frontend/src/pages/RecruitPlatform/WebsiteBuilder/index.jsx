@@ -75,6 +75,7 @@ export default function WebsiteBuilder() {
   const [previewMobile, setPreviewMobile] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const iframeRef = useRef(null);
+  const hasAutoSeededRef = useRef(false);
 
   const loadPages = useCallback(async () => {
     if (!recruitToken) return;
@@ -83,6 +84,34 @@ export default function WebsiteBuilder() {
       const res = await fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/landing-pages`);
       if (res.ok) {
         const data = await res.json();
+        if (data.length === 0 && !hasAutoSeededRef.current) {
+          // Auto-seed the callcenter starter page on first empty load
+          hasAutoSeededRef.current = true;
+          setSeeding(true);
+          try {
+            const seedRes = await fetchWithAuth(
+              `${API_BASE}/api/v1/recruit-platform/landing-pages/seed-callcenter`,
+              { method: 'POST' },
+            );
+            if (seedRes.ok) {
+              // Re-fetch after seed
+              const res2 = await fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/landing-pages`);
+              if (res2.ok) {
+                const data2 = await res2.json();
+                setPages(data2);
+                if (data2.length > 0) {
+                  setSelectedId(data2[0].id);
+                  setConfig({ ...DEFAULT_CONFIG, ...(data2[0].config || {}) });
+                }
+                return;
+              }
+            }
+          } catch (_) {
+            // seed failed silently — fall through to show empty state
+          } finally {
+            setSeeding(false);
+          }
+        }
         setPages(data);
         if (data.length > 0 && !selectedId) {
           setSelectedId(data[0].id);
