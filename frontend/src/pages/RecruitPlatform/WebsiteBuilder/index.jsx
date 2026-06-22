@@ -59,7 +59,7 @@ const TABS = [
 ];
 
 export default function WebsiteBuilder() {
-  const { recruitToken } = useRecruitPlatform();
+  const { recruitToken, fetchWithAuth } = useRecruitPlatform();
   const [pages, setPages] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
@@ -76,16 +76,11 @@ export default function WebsiteBuilder() {
   const [seeding, setSeeding] = useState(false);
   const iframeRef = useRef(null);
 
-  const authHeaders = {
-    Authorization: `Bearer ${recruitToken}`,
-    'Content-Type': 'application/json',
-  };
-
   const loadPages = useCallback(async () => {
     if (!recruitToken) return;
     setListError('');
     try {
-      const res = await fetch(`${API_BASE}/api/v1/recruit-platform/landing-pages`, { headers: authHeaders });
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/landing-pages`);
       if (res.ok) {
         const data = await res.json();
         setPages(data);
@@ -100,7 +95,7 @@ export default function WebsiteBuilder() {
     } catch (e) {
       setListError('Failed to connect to API');
     }
-  }, [recruitToken]);
+  }, [recruitToken, fetchWithAuth]);
 
   useEffect(() => { loadPages(); }, [loadPages]);
 
@@ -108,9 +103,9 @@ export default function WebsiteBuilder() {
     if (!pageId || !recruitToken) return;
     setPreviewLoading(true);
     try {
-      const res = await fetch(
+      const res = await fetchWithAuth(
         `${API_BASE}/api/v1/recruit-platform/landing-pages/${pageId}/preview`,
-        { headers: { Authorization: `Bearer ${recruitToken}` } },
+        { headers: {} },
       );
       if (res.ok) setPreviewHtml(await res.text());
     } catch (_) {
@@ -118,7 +113,7 @@ export default function WebsiteBuilder() {
     } finally {
       setPreviewLoading(false);
     }
-  }, [recruitToken]);
+  }, [recruitToken, fetchWithAuth]);
 
   useEffect(() => {
     if (selectedId) loadPreview(selectedId);
@@ -148,9 +143,8 @@ export default function WebsiteBuilder() {
   };
 
   const doSave = async () => {
-    const res = await fetch(`${API_BASE}/api/v1/recruit-platform/landing-pages/${selectedId}`, {
+    const res = await fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/landing-pages/${selectedId}`, {
       method: 'PUT',
-      headers: authHeaders,
       body: JSON.stringify({ config }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || 'Save failed');
@@ -178,9 +172,9 @@ export default function WebsiteBuilder() {
     setError('');
     try {
       await doSave();
-      const res = await fetch(
+      const res = await fetchWithAuth(
         `${API_BASE}/api/v1/recruit-platform/landing-pages/${selectedId}/publish`,
-        { method: 'POST', headers: authHeaders },
+        { method: 'POST' },
       );
       if (!res.ok) throw new Error((await res.json()).detail || 'Publish failed');
       setSaveMsg('Published');
@@ -197,9 +191,9 @@ export default function WebsiteBuilder() {
     if (!selectedId) return;
     setSaving(true);
     try {
-      const res = await fetch(
+      const res = await fetchWithAuth(
         `${API_BASE}/api/v1/recruit-platform/landing-pages/${selectedId}/unpublish`,
-        { method: 'POST', headers: authHeaders },
+        { method: 'POST' },
       );
       if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
       await loadPages();
@@ -213,8 +207,8 @@ export default function WebsiteBuilder() {
   const deletePage = async () => {
     if (!selectedId || !window.confirm('Delete this page?')) return;
     try {
-      await fetch(`${API_BASE}/api/v1/recruit-platform/landing-pages/${selectedId}`, {
-        method: 'DELETE', headers: authHeaders,
+      await fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/landing-pages/${selectedId}`, {
+        method: 'DELETE',
       });
       setSelectedId(null);
       setConfig(DEFAULT_CONFIG);
@@ -229,9 +223,8 @@ export default function WebsiteBuilder() {
     if (!createForm.title || !createForm.slug) return;
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/v1/recruit-platform/landing-pages`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/landing-pages`, {
         method: 'POST',
-        headers: authHeaders,
         body: JSON.stringify({ title: createForm.title, slug: createForm.slug, config: DEFAULT_CONFIG }),
       });
       if (!res.ok) throw new Error((await res.json()).detail || 'Create failed');
@@ -250,8 +243,8 @@ export default function WebsiteBuilder() {
     setSeeding(true);
     setListError('');
     try {
-      const res = await fetch(`${API_BASE}/api/v1/recruit-platform/landing-pages/seed-callcenter`, {
-        method: 'POST', headers: authHeaders,
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/landing-pages/seed-callcenter`, {
+        method: 'POST',
       });
       if (!res.ok) throw new Error((await res.json()).detail || 'Seed failed');
       await loadPages();

@@ -27,6 +27,10 @@
   ],
   "rewrites": [
     {
+      "source": "/token/:path*",
+      "destination": "https://api.perenniaai.com/token/:path*"
+    },
+    {
       "source": "/token",
       "destination": "https://api.perenniaai.com/token"
     },
