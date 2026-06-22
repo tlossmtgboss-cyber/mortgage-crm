@@ -56,6 +56,8 @@ landing_pages_public_router = APIRouter(
 # ---------------------------------------------------------------------------
 
 class LandingPageConfig(BaseModel):
+    model_config = {"extra": "allow"}
+
     primary_color: str = "#6AAA26"
     primary_color_dark: str = "#578F1E"
     primary_color_pale: str = "#EFF7E1"
@@ -202,17 +204,23 @@ def _auto_seed_callcenter(db, org_id: int) -> None:
     """Seed the callcenter page for org_id if it doesn't exist yet."""
     import json as _json
     from migrations.add_recruit_landing_pages import _CALLCENTER_CONFIG
+    org_row = db.execute(
+        text("SELECT slug FROM organizations WHERE id = :oid LIMIT 1"), {"oid": org_id}
+    ).fetchone()
+    org_slug = org_row[0] if org_row else f"org-{org_id}"
+    config = dict(_CALLCENTER_CONFIG)
+    config["org_slug"] = org_slug
     db.execute(text(f"SET LOCAL app.current_tenant = '{org_id}'"))
     db.execute(text("""
         INSERT INTO recruit_landing_pages
             (organization_id, title, slug, status, config)
-        VALUES (:oid, :title, :slug, 'published', CAST(:config AS jsonb))
+        VALUES (:oid, :title, :slug, 'published', CAST(:config AS JSONB))
         ON CONFLICT (organization_id, slug) DO NOTHING
     """), {
         "oid": org_id,
         "title": "Call Center — SC",
         "slug": "callcenter",
-        "config": _json.dumps(_CALLCENTER_CONFIG),
+        "config": _json.dumps(config),
     })
     db.commit()
 
@@ -348,16 +356,21 @@ def update_landing_page(
     if body.slug is not None:
         updates["slug"] = body.slug.lower().strip()
     if body.config is not None:
-        updates["config"] = json.dumps(body.config.model_dump())
+        updates["config"] = json.dumps(body.config.model_dump(warnings=False))
 
     if not updates:
         return {"detail": "no changes"}
 
-    set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
-    set_clauses += ", updated_at = NOW()"
+    # Build SET clause — use CAST(:config AS JSONB) instead of :config::jsonb
+    # because psycopg2 parses ::jsonb as a broken named-parameter token.
+    set_parts = []
+    for k in updates:
+        if k == "config":
+            set_parts.append("config = CAST(:config AS JSONB)")
+        else:
+            set_parts.append(f"{k} = :{k}")
+    set_clauses = ", ".join(set_parts) + ", updated_at = NOW()"
     params = {**updates, "pid": page_id, "oid": org_id}
-    if "config" in params:
-        set_clauses = set_clauses.replace("config = :config", "config = :config::jsonb")
 
     try:
         row = db.execute(
@@ -475,16 +488,25 @@ def seed_callcenter_page(
     org_id = getattr(current_user, "organization_id", None)
     if not org_id:
         raise HTTPException(status_code=403, detail="No organization")
+
+    # Look up org slug for form submission URLs
+    org_row = db.execute(
+        text("SELECT slug FROM organizations WHERE id = :oid LIMIT 1"), {"oid": org_id}
+    ).fetchone()
+    org_slug = org_row[0] if org_row else f"org-{org_id}"
+
+    config = dict(_CALLCENTER_CONFIG)
+    config["org_slug"] = org_slug
+
     try:
-        # Set tenant context as integer (matching integer-based RLS policy)
         db.execute(text(f"SET LOCAL app.current_tenant = '{org_id}'"))
         row = db.execute(text("""
             INSERT INTO recruit_landing_pages
                 (organization_id, title, slug, status, config, created_by)
-            VALUES (:oid, :title, :slug, 'published', CAST(:config AS jsonb), :uid)
+            VALUES (:oid, :title, :slug, 'published', CAST(:config AS JSONB), :uid)
             ON CONFLICT (organization_id, slug)
             DO UPDATE SET
-                config = CAST(EXCLUDED.config AS jsonb),
+                config = CAST(EXCLUDED.config AS JSONB),
                 status = 'published',
                 updated_at = NOW()
             RETURNING id, title, slug, status
@@ -492,7 +514,7 @@ def seed_callcenter_page(
             "oid": org_id,
             "title": "Call Center — SC",
             "slug": "callcenter",
-            "config": _json.dumps(_CALLCENTER_CONFIG),
+            "config": _json.dumps(config),
             "uid": getattr(current_user, "id", None),
         }).fetchone()
         db.commit()
@@ -607,10 +629,12 @@ def admin_seed_callcenter(x_admin_key: str = Header(...)):
 def serve_landing_page(slug: str, db: Session = Depends(get_db)):
     row = db.execute(
         text("""
-            SELECT rp.id, rp.slug, rp.config, t.slug
+            SELECT rp.id, rp.slug, rp.config,
+                   COALESCE(t.slug, rp.config->>'org_slug', '') AS org_slug
             FROM recruit_landing_pages rp
-            JOIN organizations t ON t.id = rp.organization_id
+            LEFT JOIN organizations t ON t.id = rp.organization_id
             WHERE rp.slug = :slug AND rp.status = 'published'
+            ORDER BY rp.updated_at DESC
             LIMIT 1
         """),
         {"slug": slug},
