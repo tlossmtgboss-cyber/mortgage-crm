@@ -40,39 +40,57 @@ async function apiRequest(endpoint, options = {}) {
 
 export const connectionApi = {
   /**
-   * Connect Follow Up Boss account with API key
+   * Connect a Follow Up Boss account with API key (multiple allowed)
    */
-  connect: (apiKey) =>
+  connect: (apiKey, accountLabel = null) =>
     apiRequest('/api/v1/integrations/followupboss/connect', {
       method: 'POST',
-      body: JSON.stringify({ api_key: apiKey }),
+      body: JSON.stringify({ api_key: apiKey, account_label: accountLabel }),
     }),
 
   /**
-   * Disconnect Follow Up Boss account
+   * Disconnect a specific Follow Up Boss account by connection ID
    */
-  disconnect: () =>
-    apiRequest('/api/v1/integrations/followupboss/disconnect', {
+  disconnect: (connectionId) =>
+    apiRequest(`/api/v1/integrations/followupboss/disconnect/${connectionId}`, {
       method: 'DELETE',
     }),
 
   /**
-   * Get connection status
+   * List all connected Follow Up Boss accounts
    */
-  getStatus: () =>
-    apiRequest('/api/v1/integrations/followupboss/status'),
+  getConnections: () =>
+    apiRequest('/api/v1/integrations/followupboss/connections'),
+
+  /**
+   * Get status for a specific connection (omit connectionId for first)
+   */
+  getStatus: (connectionId = null) => {
+    const url = connectionId
+      ? `/api/v1/integrations/followupboss/status?connection_id=${connectionId}`
+      : '/api/v1/integrations/followupboss/status';
+    return apiRequest(url);
+  },
 
   /**
    * Verify API connection is still valid
    */
-  verify: () =>
-    apiRequest('/api/v1/integrations/followupboss/verify'),
+  verify: (connectionId = null) => {
+    const url = connectionId
+      ? `/api/v1/integrations/followupboss/verify?connection_id=${connectionId}`
+      : '/api/v1/integrations/followupboss/verify';
+    return apiRequest(url);
+  },
 
   /**
    * Get webhook URL for FUB configuration
    */
-  getWebhookUrl: () =>
-    apiRequest('/api/v1/integrations/followupboss/webhook-url'),
+  getWebhookUrl: (connectionId = null) => {
+    const url = connectionId
+      ? `/api/v1/integrations/followupboss/webhook-url?connection_id=${connectionId}`
+      : '/api/v1/integrations/followupboss/webhook-url';
+    return apiRequest(url);
+  },
 };
 
 // =============================================================================
@@ -83,11 +101,12 @@ export const settingsApi = {
   /**
    * Update sync settings
    */
-  updateSettings: (settings) =>
-    apiRequest('/api/v1/integrations/followupboss/settings', {
-      method: 'PUT',
-      body: JSON.stringify(settings),
-    }),
+  updateSettings: (settings, connectionId = null) => {
+    const url = connectionId
+      ? `/api/v1/integrations/followupboss/settings?connection_id=${connectionId}`
+      : '/api/v1/integrations/followupboss/settings';
+    return apiRequest(url, { method: 'PUT', body: JSON.stringify(settings) });
+  },
 };
 
 // =============================================================================
@@ -127,17 +146,19 @@ export const syncApi = {
   /**
    * Trigger manual sync from FUB
    */
-  triggerSync: (limit = 100) =>
-    apiRequest(`/api/v1/integrations/followupboss/sync?limit=${limit}`, {
-      method: 'POST',
-    }),
+  triggerSync: (limit = 100, connectionId = null) => {
+    let url = `/api/v1/integrations/followupboss/sync?limit=${limit}`;
+    if (connectionId) url += `&connection_id=${connectionId}`;
+    return apiRequest(url, { method: 'POST' });
+  },
 
   /**
    * Get sync history
    */
-  getHistory: (limit = 50, offset = 0, status = null) => {
+  getHistory: (limit = 50, offset = 0, status = null, connectionId = null) => {
     let url = `/api/v1/integrations/followupboss/sync-history?limit=${limit}&offset=${offset}`;
     if (status) url += `&status=${status}`;
+    if (connectionId) url += `&connection_id=${connectionId}`;
     return apiRequest(url);
   },
 };

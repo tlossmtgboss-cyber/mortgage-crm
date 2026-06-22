@@ -1463,6 +1463,25 @@ def _run_critical_schema_migrations():
             except Exception:
                 db.rollback()
 
+        # --- Add multi-account columns to fub_user_connections ---
+        try:
+            db.execute(sa_text(
+                "ALTER TABLE fub_user_connections ADD COLUMN IF NOT EXISTS account_label VARCHAR(100)"
+            ))
+            db.commit()
+            success_count += 1
+        except Exception:
+            db.rollback()
+
+        try:
+            db.execute(sa_text(
+                "ALTER TABLE fub_user_connections DROP CONSTRAINT IF EXISTS fub_user_connections_user_id_key"
+            ))
+            db.commit()
+            success_count += 1
+        except Exception:
+            db.rollback()
+
         logger.info(f"Schema migrations: {success_count} applied, {skip_count} skipped, {fail_count} FAILED")
         if fail_count > 0:
             logger.error(f"Schema migrations completed with {fail_count} FAILURES — check logs above for details")

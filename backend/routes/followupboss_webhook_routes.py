@@ -36,9 +36,9 @@ router = APIRouter(prefix="/webhooks/followupboss", tags=["Follow Up Boss Webhoo
 # WEBHOOK ENDPOINT
 # =============================================================================
 
-@router.post("/{user_id}")
+@router.post("/{connection_id}")
 async def handle_fub_webhook(
-    user_id: int,
+    connection_id: int,
     request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -46,11 +46,10 @@ async def handle_fub_webhook(
     """
     Handle incoming webhook from Follow Up Boss.
 
-    FUB sends webhooks for subscribed events. Each user has their own
-    webhook URL with a unique secret for validation.
+    Each connection has its own unique webhook URL keyed by connection_id.
 
     Args:
-        user_id: The CRM user ID this webhook is for
+        connection_id: The FUB connection ID this webhook is for
         request: FastAPI request object
         background_tasks: For async processing
         db: Database session
@@ -58,15 +57,15 @@ async def handle_fub_webhook(
     Returns:
         Acknowledgment response
     """
-    # Get the user's FUB connection
+    # Get the FUB connection
     connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == user_id,
+        FUBUserConnection.id == connection_id,
         FUBUserConnection.sync_enabled == True
     ).first()
 
     if not connection:
-        logger.warning(f"FUB webhook received for user {user_id} with no active connection")
-        raise HTTPException(status_code=404, detail="No active FUB connection for user")
+        logger.warning(f"FUB webhook received for connection_id={connection_id} with no active connection")
+        raise HTTPException(status_code=404, detail="No active FUB connection found")
 
     # Get raw body for signature validation
     body = await request.body()
@@ -74,10 +73,10 @@ async def handle_fub_webhook(
     # Validate webhook signature — secret is required
     signature = request.headers.get("X-FUB-Signature", "")
     if not connection.webhook_secret:
-        logger.error(f"FUB webhook secret not configured for user {user_id}")
+        logger.error(f"FUB webhook secret not configured for connection_id={connection_id}")
         raise HTTPException(status_code=503, detail="Webhook secret not configured")
     if not validate_webhook_signature(body, signature, connection.webhook_secret):
-        logger.warning(f"FUB webhook signature validation failed for user {user_id}")
+        logger.warning(f"FUB webhook signature validation failed for connection_id={connection_id}")
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     # Parse payload
@@ -90,7 +89,7 @@ async def handle_fub_webhook(
     event_type = payload.get("event", "unknown")
     event_data = payload.get("data", {})
 
-    logger.info(f"FUB webhook received: {event_type} for user {user_id}")
+    logger.info(f"FUB webhook received: {event_type} for connection_id={connection_id}")
 
     # Create sync event for audit
     sync_event = FUBSyncEvent(
@@ -110,7 +109,7 @@ async def handle_fub_webhook(
     # Look up user's organization for RLS context in background task
     org_row = db.execute(
         text("SELECT organization_id FROM users WHERE id = :uid"),
-        {"uid": user_id},
+        {"uid": connection.user_id},
     ).fetchone()
     org_id = org_row.organization_id if org_row else None
 
@@ -536,9 +535,9 @@ def handle_person_assigned(
 # WEBHOOK TEST ENDPOINT
 # =============================================================================
 
-@router.post("/{user_id}/test")
+@router.post("/{connection_id}/test")
 async def test_webhook_endpoint(
-    user_id: int,
+    connection_id: int,
 ):
     """
     Test endpoint for verifying webhook URL is reachable.

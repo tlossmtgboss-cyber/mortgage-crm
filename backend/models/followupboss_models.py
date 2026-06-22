@@ -67,7 +67,10 @@ class FUBUserConnection(Base):
     __tablename__ = "fub_user_connections"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    # Human-readable label for this connection (e.g. "CMG Home Loans", "Personal FUB")
+    account_label = Column(String(100), nullable=True)
 
     # API credentials (encrypted)
     api_key_encrypted = Column(Text, nullable=False)
@@ -222,11 +225,14 @@ class FUBStageMapping(Base):
 class FUBConnectRequest(BaseModel):
     """Request to connect FUB account."""
     api_key: str = Field(..., min_length=10, description="Follow Up Boss API key")
+    account_label: Optional[str] = Field(None, max_length=100, description="Optional label for this connection")
 
 
 class FUBConnectionStatus(BaseModel):
-    """FUB connection status response."""
+    """FUB connection status response (single connection)."""
     connected: bool
+    connection_id: Optional[int] = None
+    account_label: Optional[str] = None
     fub_user_email: Optional[str] = None
     fub_user_name: Optional[str] = None
     sync_enabled: bool = True
@@ -234,6 +240,26 @@ class FUBConnectionStatus(BaseModel):
     last_sync_status: Optional[str] = None
     webhook_url: Optional[str] = None
     total_synced_leads: int = 0
+
+
+class FUBConnectionListItem(BaseModel):
+    """Single connection in the connections list."""
+    id: int
+    account_label: Optional[str] = None
+    fub_user_email: Optional[str] = None
+    fub_user_name: Optional[str] = None
+    sync_enabled: bool = True
+    last_sync_at: Optional[datetime] = None
+    last_sync_status: Optional[str] = None
+    webhook_url: Optional[str] = None
+    total_synced_leads: int = 0
+    created_at: Optional[datetime] = None
+
+
+class FUBConnectionsResponse(BaseModel):
+    """List of all FUB connections for a user."""
+    connections: List[FUBConnectionListItem]
+    total: int
 
 
 class FUBStageMappingItem(BaseModel):

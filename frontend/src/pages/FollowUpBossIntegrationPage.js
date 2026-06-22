@@ -26,9 +26,12 @@ function FollowUpBossIntegrationPage() {
   const [loading, setLoading] = useState(true);
 
   // Connection state
+  const [connections, setConnections] = useState([]);
   const [connectionStatus, setConnectionStatus] = useState(null);
   const [apiKey, setApiKey] = useState('');
+  const [accountLabel, setAccountLabel] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   // Settings state
   const [settings, setSettings] = useState({
@@ -64,7 +67,13 @@ function FollowUpBossIntegrationPage() {
   const loadConnectionStatus = async () => {
     setLoading(true);
     try {
-      const data = await connectionApi.getStatus();
+      // Load all connections list + first connection status for the main UI
+      const [connectionsData, statusData] = await Promise.all([
+        connectionApi.getConnections().catch(() => ({ connections: [], total: 0 })),
+        connectionApi.getStatus(),
+      ]);
+      setConnections(connectionsData.connections || []);
+      const data = statusData;
       setConnectionStatus(data);
       if (data.connected) {
         await Promise.all([
@@ -131,9 +140,11 @@ function FollowUpBossIntegrationPage() {
     }
     setConnecting(true);
     try {
-      const data = await connectionApi.connect(apiKey.trim());
+      const data = await connectionApi.connect(apiKey.trim(), accountLabel.trim() || null);
       toast.success(`Connected as ${data.fub_user_name || 'Unknown User'}`);
       setApiKey('');
+      setAccountLabel('');
+      setShowAddForm(false);
       await loadConnectionStatus();
     } catch (err) {
       toast.error(err.message || 'Failed to connect');
@@ -142,15 +153,12 @@ function FollowUpBossIntegrationPage() {
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!window.confirm('Disconnect Follow Up Boss? This will stop all syncing.')) return;
+  const handleDisconnect = async (connectionId) => {
+    if (!window.confirm('Disconnect this Follow Up Boss account? This will stop syncing for this account.')) return;
     try {
-      await connectionApi.disconnect();
-      toast.success('Disconnected from Follow Up Boss');
-      setConnectionStatus({ connected: false });
-      setStageMappings([]);
-      setSyncHistory([]);
-      setLeadMappings([]);
+      await connectionApi.disconnect(connectionId);
+      toast.success('Disconnected Follow Up Boss account');
+      await loadConnectionStatus();
     } catch (err) {
       toast.error(err.message || 'Failed to disconnect');
     }
@@ -263,8 +271,8 @@ function FollowUpBossIntegrationPage() {
           </div>
           <span>Follow Up Boss</span>
         </div>
-        <span className={`fub-status ${connectionStatus?.connected ? 'connected' : 'disconnected'}`}>
-          {connectionStatus?.connected ? 'Connected' : 'Disconnected'}
+        <span className={`fub-status ${connections.length > 0 ? 'connected' : 'disconnected'}`}>
+          {connections.length > 0 ? `${connections.length} Connected` : 'Disconnected'}
         </span>
       </div>
 
@@ -281,7 +289,7 @@ function FollowUpBossIntegrationPage() {
             key={item.key}
             className={`fub-nav-item ${activeSection === item.key ? 'active' : ''}`}
             onClick={() => setActiveSection(item.key)}
-            disabled={item.requiresConnection && !connectionStatus?.connected}
+            disabled={item.requiresConnection && connections.length === 0}
           >
             <span className="fub-nav-icon">{item.icon}</span>
             {item.label}
@@ -307,12 +315,12 @@ function FollowUpBossIntegrationPage() {
 
       <div className="fub-stats-grid">
         <div className="fub-stat-card">
-          <div className="fub-stat-icon" style={{ background: connectionStatus?.connected ? '#e6f9f0' : '#fef2f2' }}>
-            {connectionStatus?.connected ? '\u2705' : '\u274C'}
+          <div className="fub-stat-icon" style={{ background: connections.length > 0 ? '#e6f9f0' : '#fef2f2' }}>
+            {connections.length > 0 ? '\u2705' : '\u274C'}
           </div>
           <div>
-            <div className="fub-stat-value">{connectionStatus?.connected ? 'Active' : 'Inactive'}</div>
-            <div className="fub-stat-label">Connection Status</div>
+            <div className="fub-stat-value">{connections.length > 0 ? `${connections.length} Account${connections.length !== 1 ? 's' : ''}` : 'Not Connected'}</div>
+            <div className="fub-stat-label">FUB Accounts</div>
           </div>
         </div>
         <div className="fub-stat-card">
@@ -342,36 +350,40 @@ function FollowUpBossIntegrationPage() {
         </div>
       </div>
 
-      {connectionStatus?.connected && (
+      {connections.length > 0 && (
         <div className="fub-card">
           <div className="fub-card-header success">
             <span className="fub-card-icon">{'\u2705'}</span>
-            Connected to Follow Up Boss
+            {connections.length === 1 ? 'Connected to Follow Up Boss' : `${connections.length} Follow Up Boss Accounts Connected`}
           </div>
           <div className="fub-card-body">
-            <div className="fub-info-grid">
-              <div className="fub-info-item">
-                <span className="fub-info-label">Account</span>
-                <span className="fub-info-value">{connectionStatus.fub_user_name || 'Unknown'}</span>
+            {connections.map(conn => (
+              <div key={conn.id} style={{ marginBottom: '12px', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+                <div className="fub-info-grid">
+                  <div className="fub-info-item">
+                    <span className="fub-info-label">Account</span>
+                    <span className="fub-info-value">{conn.account_label || conn.fub_user_name || 'Unknown'}</span>
+                  </div>
+                  <div className="fub-info-item">
+                    <span className="fub-info-label">FUB User</span>
+                    <span className="fub-info-value">{conn.fub_user_email || 'N/A'}</span>
+                  </div>
+                  <div className="fub-info-item">
+                    <span className="fub-info-label">Synced Leads</span>
+                    <span className="fub-info-value">{conn.total_synced_leads}</span>
+                  </div>
+                  <div className="fub-info-item">
+                    <span className="fub-info-label">Status</span>
+                    <span className="fub-info-value">{conn.sync_enabled ? 'Active' : 'Paused'}</span>
+                  </div>
+                </div>
               </div>
-              <div className="fub-info-item">
-                <span className="fub-info-label">Email</span>
-                <span className="fub-info-value">{connectionStatus.fub_user_email || 'N/A'}</span>
-              </div>
-              <div className="fub-info-item">
-                <span className="fub-info-label">Sync Direction</span>
-                <span className="fub-info-value">Bidirectional</span>
-              </div>
-              <div className="fub-info-item">
-                <span className="fub-info-label">Auto Sync</span>
-                <span className="fub-info-value">{settings.sync_enabled ? 'Enabled' : 'Disabled'}</span>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       )}
 
-      {!connectionStatus?.connected && (
+      {connections.length === 0 && (
         <div className="fub-cta-card">
           <h3>Connect Follow Up Boss</h3>
           <p>Enter your API key to start syncing leads between Follow Up Boss and your CRM.</p>
@@ -384,82 +396,127 @@ function FollowUpBossIntegrationPage() {
     </div>
   );
 
+  const renderAddAccountForm = () => (
+    <div className="fub-card">
+      <div className="fub-card-header">
+        <span className="fub-card-icon">{'\u{1F511}'}</span>
+        Add Follow Up Boss Account
+      </div>
+      <div className="fub-card-body">
+        <p style={{ color: '#64748b', marginBottom: '16px' }}>
+          Find your API key in Follow Up Boss under <strong>Admin &gt; API</strong>.
+          The key starts with <code>fka_</code>.
+        </p>
+        <div className="fub-input-group">
+          <label className="fub-label">Account Label (optional)</label>
+          <input
+            type="text"
+            className="fub-input"
+            placeholder="e.g. CMG Home Loans, Personal FUB"
+            value={accountLabel}
+            onChange={(e) => setAccountLabel(e.target.value)}
+          />
+        </div>
+        <div className="fub-input-group" style={{ marginTop: '12px' }}>
+          <label className="fub-label">API Key</label>
+          <input
+            type="password"
+            className="fub-input"
+            placeholder="fka_XXXX..."
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+          <button
+            className="fub-btn fub-btn-primary"
+            onClick={handleConnect}
+            disabled={connecting || !apiKey.trim()}
+          >
+            {connecting ? 'Connecting...' : 'Connect Account'}
+          </button>
+          {connections.length > 0 && (
+            <button className="fub-btn fub-btn-outline" onClick={() => { setShowAddForm(false); setApiKey(''); setAccountLabel(''); }}>
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   const renderConnection = () => (
     <div className="fub-section">
-      <h1>Connection</h1>
-      <p className="fub-description">Manage your Follow Up Boss API connection and sync settings.</p>
+      <div className="fub-section-header">
+        <div>
+          <h1>Connections</h1>
+          <p className="fub-description">Manage your Follow Up Boss accounts. Multiple accounts can sync simultaneously.</p>
+        </div>
+        {connections.length > 0 && !showAddForm && (
+          <button className="fub-btn fub-btn-primary" onClick={() => setShowAddForm(true)}>
+            + Add Account
+          </button>
+        )}
+      </div>
 
-      {!connectionStatus?.connected ? (
-        <div className="fub-card">
-          <div className="fub-card-header">
-            <span className="fub-card-icon">{'\u{1F511}'}</span>
-            Connect with API Key
+      {/* Connected accounts list */}
+      {connections.map(conn => (
+        <div key={conn.id} className="fub-card">
+          <div className="fub-card-header success">
+            <span className="fub-card-icon">{'\u2705'}</span>
+            {conn.account_label || conn.fub_user_name || 'Follow Up Boss Account'}
           </div>
           <div className="fub-card-body">
-            <p style={{ color: '#64748b', marginBottom: '16px' }}>
-              Find your API key in Follow Up Boss under <strong>Admin &gt; API</strong>.
-              The key starts with <code>fka_</code>.
-            </p>
-            <div className="fub-input-group">
-              <label className="fub-label">API Key</label>
-              <input
-                type="password"
-                className="fub-input"
-                placeholder="fka_XXXX..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
-              />
-            </div>
-            <button
-              className="fub-btn fub-btn-primary"
-              onClick={handleConnect}
-              disabled={connecting || !apiKey.trim()}
-              style={{ marginTop: '16px' }}
-            >
-              {connecting ? 'Connecting...' : 'Connect'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* Connection Info */}
-          <div className="fub-card">
-            <div className="fub-card-header success">
-              <span className="fub-card-icon">{'\u2705'}</span>
-              Connected as {connectionStatus.fub_user_name}
-            </div>
-            <div className="fub-card-body">
-              <div className="fub-info-grid">
-                <div className="fub-info-item">
-                  <span className="fub-info-label">User</span>
-                  <span className="fub-info-value">{connectionStatus.fub_user_name}</span>
-                </div>
-                <div className="fub-info-item">
-                  <span className="fub-info-label">Email</span>
-                  <span className="fub-info-value">{connectionStatus.fub_user_email || 'N/A'}</span>
-                </div>
-                <div className="fub-info-item">
-                  <span className="fub-info-label">FUB User ID</span>
-                  <span className="fub-info-value">{connectionStatus.fub_user_id || 'N/A'}</span>
-                </div>
+            <div className="fub-info-grid">
+              <div className="fub-info-item">
+                <span className="fub-info-label">FUB User</span>
+                <span className="fub-info-value">{conn.fub_user_name || 'N/A'}</span>
+              </div>
+              <div className="fub-info-item">
+                <span className="fub-info-label">Email</span>
+                <span className="fub-info-value">{conn.fub_user_email || 'N/A'}</span>
+              </div>
+              <div className="fub-info-item">
+                <span className="fub-info-label">Synced Leads</span>
+                <span className="fub-info-value">{conn.total_synced_leads}</span>
+              </div>
+              <div className="fub-info-item">
+                <span className="fub-info-label">Last Sync</span>
+                <span className="fub-info-value">
+                  {conn.last_sync_at ? new Date(conn.last_sync_at).toLocaleDateString() : 'Never'}
+                </span>
+              </div>
+              <div className="fub-info-item">
+                <span className="fub-info-label">Status</span>
+                <span className="fub-info-value">{conn.sync_enabled ? 'Active' : 'Paused'}</span>
+              </div>
+              {conn.account_label && (
                 <div className="fub-info-item">
                   <span className="fub-info-label">Connected Since</span>
                   <span className="fub-info-value">
-                    {connectionStatus.connected_at
-                      ? new Date(connectionStatus.connected_at).toLocaleDateString()
-                      : 'N/A'}
+                    {conn.created_at ? new Date(conn.created_at).toLocaleDateString() : 'N/A'}
                   </span>
                 </div>
-              </div>
-              <div style={{ marginTop: '16px' }}>
-                <button className="fub-btn fub-btn-outline" onClick={handleVerify}>
-                  Verify Connection
-                </button>
-              </div>
+              )}
+            </div>
+            <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+              <button
+                className="fub-btn fub-btn-danger fub-btn-sm"
+                onClick={() => handleDisconnect(conn.id)}
+              >
+                Disconnect
+              </button>
             </div>
           </div>
+        </div>
+      ))}
 
+      {/* Add account form */}
+      {(connections.length === 0 || showAddForm) && renderAddAccountForm()}
+
+      {connections.length > 0 && connectionStatus?.connected && (
+        <>
           {/* Webhook Setup */}
           <div className="fub-card">
             <div className="fub-card-header">
@@ -524,21 +581,6 @@ function FollowUpBossIntegrationPage() {
             </div>
           </div>
 
-          {/* Danger Zone */}
-          <div className="fub-card fub-danger-zone">
-            <div className="fub-card-header" style={{ background: '#fef2f2', color: '#dc2626' }}>
-              <span className="fub-card-icon">{'\u26A0\uFE0F'}</span>
-              Danger Zone
-            </div>
-            <div className="fub-card-body">
-              <p style={{ color: '#64748b', marginBottom: '16px' }}>
-                Disconnecting will stop all syncing. Existing lead data in your CRM will not be deleted.
-              </p>
-              <button className="fub-btn fub-btn-danger" onClick={handleDisconnect}>
-                Disconnect Follow Up Boss
-              </button>
-            </div>
-          </div>
         </>
       )}
     </div>
