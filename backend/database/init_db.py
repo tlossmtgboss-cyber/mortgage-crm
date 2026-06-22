@@ -2464,6 +2464,14 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ recruit_landing_pages migration note: {e}")
 
+        # Fix recruit_landing_pages RLS: switch tenant isolation to integer comparison
+        try:
+            from migrations.fix_recruit_lp_rls import run_migration as fix_lp_rls
+            fix_lp_rls(_engine)
+            logger.info("✅ recruit_landing_pages RLS fixed")
+        except Exception as e:
+            logger.warning(f"⚠️ recruit_landing_pages RLS fix note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")

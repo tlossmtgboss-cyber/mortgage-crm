@@ -234,6 +234,7 @@ def create_landing_page(
     config = body.config.model_dump() if body.config else {}
 
     try:
+        db.execute(text(f"SET LOCAL app.current_tenant = '{org_id}'"))
         row = db.execute(
             text("""
                 INSERT INTO recruit_landing_pages
@@ -293,6 +294,7 @@ def update_landing_page(
     import json
     org_id = getattr(current_user, "organization_id", None)
 
+    db.execute(text(f"SET LOCAL app.current_tenant = '{org_id}'"))
     existing = db.execute(
         text("SELECT id, config FROM recruit_landing_pages WHERE id = :pid AND organization_id = :oid"),
         {"pid": page_id, "oid": org_id},
@@ -344,6 +346,7 @@ def delete_landing_page(
     db: Session = Depends(get_db),
 ):
     org_id = getattr(current_user, "organization_id", None)
+    db.execute(text(f"SET LOCAL app.current_tenant = '{org_id}'"))
     result = db.execute(
         text("DELETE FROM recruit_landing_pages WHERE id = :pid AND organization_id = :oid"),
         {"pid": page_id, "oid": org_id},
@@ -360,6 +363,7 @@ def publish_landing_page(
     db: Session = Depends(get_db),
 ):
     org_id = getattr(current_user, "organization_id", None)
+    db.execute(text(f"SET LOCAL app.current_tenant = '{org_id}'"))
     row = db.execute(
         text("""
             UPDATE recruit_landing_pages SET status = 'published', updated_at = NOW()
@@ -382,6 +386,7 @@ def unpublish_landing_page(
     db: Session = Depends(get_db),
 ):
     org_id = getattr(current_user, "organization_id", None)
+    db.execute(text(f"SET LOCAL app.current_tenant = '{org_id}'"))
     row = db.execute(
         text("""
             UPDATE recruit_landing_pages SET status = 'draft', updated_at = NOW()
@@ -431,6 +436,8 @@ def seed_callcenter_page(
     if not org_id:
         raise HTTPException(status_code=403, detail="No organization")
     try:
+        # Set tenant context as integer (matching integer-based RLS policy)
+        db.execute(text(f"SET LOCAL app.current_tenant = '{org_id}'"))
         row = db.execute(text("""
             INSERT INTO recruit_landing_pages
                 (organization_id, title, slug, status, config, created_by)
