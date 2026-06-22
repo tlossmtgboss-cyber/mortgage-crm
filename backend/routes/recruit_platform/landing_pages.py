@@ -198,6 +198,25 @@ def _page_row_to_dict(row) -> dict:
 # Authenticated endpoints
 # ---------------------------------------------------------------------------
 
+def _auto_seed_callcenter(db, org_id: int) -> None:
+    """Seed the callcenter page for org_id if it doesn't exist yet."""
+    import json as _json
+    from migrations.add_recruit_landing_pages import _CALLCENTER_CONFIG
+    db.execute(text(f"SET LOCAL app.current_tenant = '{org_id}'"))
+    db.execute(text("""
+        INSERT INTO recruit_landing_pages
+            (organization_id, title, slug, status, config)
+        VALUES (:oid, :title, :slug, 'published', CAST(:config AS jsonb))
+        ON CONFLICT (organization_id, slug) DO NOTHING
+    """), {
+        "oid": org_id,
+        "title": "Call Center — SC",
+        "slug": "callcenter",
+        "config": _json.dumps(_CALLCENTER_CONFIG),
+    })
+    db.commit()
+
+
 @landing_pages_router.get("")
 def list_landing_pages(
     current_user=Depends(get_current_user),
@@ -217,6 +236,24 @@ def list_landing_pages(
         """),
         {"oid": org_id},
     ).fetchall()
+
+    # Auto-seed callcenter starter page on first load for this org
+    if not rows:
+        try:
+            _auto_seed_callcenter(db, org_id)
+            rows = db.execute(
+                text("""
+                    SELECT id, organization_id, title, slug, status, config,
+                           view_count, submission_count, created_by, created_at, updated_at
+                    FROM recruit_landing_pages
+                    WHERE organization_id = :oid
+                    ORDER BY updated_at DESC
+                """),
+                {"oid": org_id},
+            ).fetchall()
+        except Exception as e:
+            logger.warning(f"Auto-seed callcenter failed for org {org_id}: {e}")
+            db.rollback()
 
     return [_page_row_to_dict(r) for r in rows]
 
