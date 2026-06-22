@@ -50,6 +50,13 @@ def run_migration(engine=None) -> None:
         conn.execute(text("DROP POLICY IF EXISTS recruit_lp_public_read ON recruit_landing_pages"))
         logger.info("[RLS] Disabled RLS on recruit_landing_pages (app-layer isolation used)")
 
+        # Drop the bad single-column unique constraint on slug (if it exists).
+        # The table should only have the composite UNIQUE (organization_id, slug).
+        # A single-column constraint on slug prevents multiple orgs from using
+        # the same slug (e.g. 'callcenter'), breaking multi-tenant inserts.
+        conn.execute(text("ALTER TABLE recruit_landing_pages DROP CONSTRAINT IF EXISTS recruit_landing_pages_slug_key"))
+        logger.info("[CONSTRAINT] Dropped single-column slug unique constraint (if present)")
+
     logger.info("✅ fix_recruit_lp_rls complete")
 
     # Re-seed callcenter page for any org that doesn't have it yet.
