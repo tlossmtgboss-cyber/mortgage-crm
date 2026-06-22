@@ -181,7 +181,8 @@ function ApplicantDetail({ applicant, recruitToken, onClose, onStatusChange }) {
 // ─── Add Candidate Modal ───────────────────────────────────────────────────────
 const EMPTY_FORM = { first_name: '', last_name: '', email: '', phone: '', status: 'applied', nmls_number: '', notes: '' };
 
-function AddCandidateModal({ recruitToken, onClose, onAdded }) {
+function AddCandidateModal({ onClose, onAdded }) {
+  const { fetchWithAuth } = useRecruitPlatform();
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -206,9 +207,9 @@ function AddCandidateModal({ recruitToken, onClose, onAdded }) {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/api/v1/recruit-platform/applicants/`, {
+      const res = await fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/applicants/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${recruitToken}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           first_name: form.first_name.trim(),
           last_name: form.last_name.trim(),
@@ -416,7 +417,6 @@ export default function RecruitDashboard() {
 
       {showAddModal && (
         <AddCandidateModal
-          recruitToken={recruitToken}
           onClose={() => setShowAddModal(false)}
           onAdded={handleCandidateAdded}
         />

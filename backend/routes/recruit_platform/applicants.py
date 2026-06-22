@@ -69,7 +69,7 @@ async def create_applicant(body: CreateApplicantBody, current_user=_CU):
                  years_experience, linkedin_url, is_active)
             VALUES
                 (:org_id, :first_name, :last_name, :email, :phone,
-                 :status, 'manual', :talent_profile::jsonb, :notes,
+                 :status, 'manual', CAST(:talent_profile AS JSONB), :notes,
                  :years_exp, :linkedin_url, TRUE)
             RETURNING id, first_name, last_name, email, phone, status, source, created_at
         """), {
