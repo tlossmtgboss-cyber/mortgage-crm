@@ -51,6 +51,23 @@
   cursor: pointer;
 }
 
+.rd-add-btn {
+  padding: 8px 16px;
+  background: #1d4ed8;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-left: auto;
+}
+
+.rd-add-btn:hover {
+  background: #1e40af;
+}
+
 .rd-export-btn {
   padding: 8px 16px;
   background: #f8fafc;
@@ -61,7 +78,7 @@
   color: #374151;
   cursor: pointer;
   transition: background 0.15s;
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .rd-export-btn:hover {
@@ -394,4 +411,100 @@
   text-align: center;
   color: #cbd5e1;
   font-size: 13px;
+}
+
+/* Add Candidate Modal */
+.rd-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.rd-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 480px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+}
+
+.rd-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.rd-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.rd-modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rd-modal-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.rd-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rd-field-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rd-input {
+  padding: 9px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 7px;
+  font-size: 14px;
+  color: #111827;
+  background: #f8fafc;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+
+.rd-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: #fff;
+}
+
+.rd-modal-error {
+  font-size: 13px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.rd-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
 }

@@ -178,6 +178,108 @@ function ApplicantDetail({ applicant, recruitToken, onClose, onStatusChange }) {
   );
 }
 
+// ─── Add Candidate Modal ───────────────────────────────────────────────────────
+const EMPTY_FORM = { first_name: '', last_name: '', email: '', phone: '', status: 'applied', nmls_number: '', notes: '' };
+
+function AddCandidateModal({ recruitToken, onClose, onAdded }) {
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.first_name.trim() || !form.last_name.trim() || !form.email.trim()) {
+      setError('First name, last name, and email are required.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/recruit-platform/applicants/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${recruitToken}` },
+        body: JSON.stringify({
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim() || null,
+          status: form.status,
+          nmls_number: form.nmls_number.trim() || null,
+          notes: form.notes.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.detail || 'Failed to add candidate.');
+        return;
+      }
+      const created = await res.json();
+      onAdded(created);
+      onClose();
+    } catch {
+      setError('Network error. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rd-modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="rd-modal">
+        <div className="rd-modal-header">
+          <span className="rd-modal-title">Add Candidate</span>
+          <button className="rd-drawer-close" onClick={onClose}>×</button>
+        </div>
+        <form onSubmit={handleSubmit} className="rd-modal-body">
+          <div className="rd-modal-row">
+            <div className="rd-modal-field">
+              <label className="rd-field-label">First Name *</label>
+              <input className="rd-input" value={form.first_name} onChange={e => set('first_name', e.target.value)} required />
+            </div>
+            <div className="rd-modal-field">
+              <label className="rd-field-label">Last Name *</label>
+              <input className="rd-input" value={form.last_name} onChange={e => set('last_name', e.target.value)} required />
+            </div>
+          </div>
+          <div className="rd-modal-field">
+            <label className="rd-field-label">Email *</label>
+            <input className="rd-input" type="email" value={form.email} onChange={e => set('email', e.target.value)} required />
+          </div>
+          <div className="rd-modal-row">
+            <div className="rd-modal-field">
+              <label className="rd-field-label">Phone</label>
+              <input className="rd-input" type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} />
+            </div>
+            <div className="rd-modal-field">
+              <label className="rd-field-label">NMLS #</label>
+              <input className="rd-input" value={form.nmls_number} onChange={e => set('nmls_number', e.target.value)} />
+            </div>
+          </div>
+          <div className="rd-modal-field">
+            <label className="rd-field-label">Stage</label>
+            <select className="rd-input" value={form.status} onChange={e => set('status', e.target.value)}>
+              {COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          </div>
+          <div className="rd-modal-field">
+            <label className="rd-field-label">Notes</label>
+            <textarea className="rd-input" rows={3} value={form.notes} onChange={e => set('notes', e.target.value)} />
+          </div>
+          {error && <div className="rd-modal-error">{error}</div>}
+          <div className="rd-modal-actions">
+            <button type="button" className="rd-btn rd-btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="rd-btn rd-btn-primary" disabled={saving}>
+              {saving ? 'Adding...' : 'Add Candidate'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function RecruitDashboard() {
   const { recruitToken } = useRecruitPlatform();
@@ -187,6 +289,7 @@ export default function RecruitDashboard() {
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [selected, setSelected] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const fetchApplicants = useCallback(() => {
     setLoading(true);
@@ -204,6 +307,10 @@ export default function RecruitDashboard() {
   const handleStatusChange = (id, newStatus) => {
     setApplicants(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
     if (selected?.id === id) setSelected(prev => ({ ...prev, status: newStatus }));
+  };
+
+  const handleCandidateAdded = (candidate) => {
+    setApplicants(prev => [candidate, ...prev]);
   };
 
   const filtered = applicants.filter(a => {
@@ -243,6 +350,9 @@ export default function RecruitDashboard() {
           <option value="">All sources</option>
           {sources.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        <button className="rd-add-btn" onClick={() => setShowAddModal(true)}>
+          + Add Candidate
+        </button>
         <button
           className="rd-export-btn"
           onClick={() => alert('CSV export coming soon')}
@@ -292,6 +402,14 @@ export default function RecruitDashboard() {
           recruitToken={recruitToken}
           onClose={() => setSelected(null)}
           onStatusChange={handleStatusChange}
+        />
+      )}
+
+      {showAddModal && (
+        <AddCandidateModal
+          recruitToken={recruitToken}
+          onClose={() => setShowAddModal(false)}
+          onAdded={handleCandidateAdded}
         />
       )}
     </div>

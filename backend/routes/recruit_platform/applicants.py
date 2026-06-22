@@ -24,6 +24,18 @@ def _cu_dep():
 _CU = _cu_dep()
 
 
+class CreateApplicantBody(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    phone: Optional[str] = None
+    status: str = "applied"
+    nmls_number: Optional[str] = None
+    years_experience: Optional[int] = None
+    linkedin_url: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class UpdateStatusBody(BaseModel):
     status: str
     notes: Optional[str] = None
@@ -32,6 +44,53 @@ class UpdateStatusBody(BaseModel):
 class AddNoteBody(BaseModel):
     note: str
     is_private: bool = False
+
+
+@applicants_router.post("/")
+async def create_applicant(body: CreateApplicantBody, current_user=_CU):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context")
+    if body.status not in VALID_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Invalid status. Must be one of: {', '.join(sorted(VALID_STATUSES))}")
+    db = SessionLocal()
+    try:
+        talent_profile = {}
+        if body.nmls_number:
+            talent_profile["nmls_number"] = body.nmls_number
+        import json
+        row = db.execute(text("""
+            INSERT INTO mm_candidates
+                (organization_id, first_name, last_name, email, phone,
+                 status, source, talent_profile, recruiter_notes,
+                 years_experience, linkedin_url, is_active)
+            VALUES
+                (:org_id, :first_name, :last_name, :email, :phone,
+                 :status, 'manual', :talent_profile::jsonb, :notes,
+                 :years_exp, :linkedin_url, TRUE)
+            RETURNING id, first_name, last_name, email, phone, status, source, created_at
+        """), {
+            "org_id": org_id,
+            "first_name": body.first_name.strip(),
+            "last_name": body.last_name.strip(),
+            "email": body.email.strip().lower(),
+            "phone": body.phone,
+            "status": body.status,
+            "talent_profile": json.dumps(talent_profile),
+            "notes": body.notes,
+            "years_exp": body.years_experience,
+            "linkedin_url": body.linkedin_url,
+        }).fetchone()
+        db.commit()
+        return {
+            "id": row[0], "first_name": row[1], "last_name": row[2],
+            "email": row[3], "phone": row[4], "status": row[5],
+            "source": row[6], "created_at": row[7].isoformat() if row[7] else None,
+        }
+    finally:
+        db.close()
 
 
 @applicants_router.get("/stats")
