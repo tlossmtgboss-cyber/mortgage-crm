@@ -2137,14 +2137,14 @@
   <div class="hero">
     <div class="hero-content">
       <div>
-        <div class="hero-eyebrow">
+        <div class="hero-eyebrow" data-field="location_display" data-tab="hero">
           <span class="hero-eyebrow-line"></span>
           Now Hiring · {{LOCATION_DISPLAY}}
         </div>
 
-        <h1>{{HERO_HEADLINE}}</h1>
+        <h1 data-field="hero_headline" data-tab="hero">{{HERO_HEADLINE}}</h1>
 
-        {{HERO_SUBHEADLINE}}
+        <div data-field="hero_subheadline" data-tab="hero">{{HERO_SUBHEADLINE}}</div>
 
         <div class="hero-checks">
           <div class="hero-check"><span class="check-icon">✓</span>No mortgage license required to start — CMG pays for it</div>
@@ -2161,19 +2161,19 @@
 
       <div class="earnings-card">
         <div class="earnings-label">Year 1 On-Target Earnings</div>
-        <div class="earnings-figure">{{YEAR1_RANGE}}</div>
+        <div class="earnings-figure" data-field="year1_range" data-tab="earnings">{{YEAR1_RANGE}}</div>
         <div class="earnings-note">base salary + commission</div>
 
         <div class="earnings-rows">
-          <div class="earnings-row">
+          <div class="earnings-row" data-field="year2_top" data-tab="earnings">
             <span class="earnings-row-label">Year 2 — Top Performer</span>
             <span class="earnings-row-val">{{YEAR2_TOP}}</span>
           </div>
-          <div class="earnings-row">
+          <div class="earnings-row" data-field="senior_lo" data-tab="earnings">
             <span class="earnings-row-label">Senior Loan Officer</span>
             <span class="earnings-row-val">{{SENIOR_LO}}</span>
           </div>
-          <div class="earnings-row">
+          <div class="earnings-row" data-field="team_lead" data-tab="earnings">
             <span class="earnings-row-label">Team Lead / Branch Mgr</span>
             <span class="earnings-row-val">{{TEAM_LEAD}}</span>
           </div>
@@ -2183,19 +2183,19 @@
 
     <div class="hero-stats">
       <div class="hero-stats-inner">
-        <div class="hero-stat">
+        <div class="hero-stat" data-field="stat_1_num" data-tab="stats">
           <div class="hero-stat-num">{{STAT_1_NUM}}</div>
           <div class="hero-stat-label">{{STAT_1_LABEL}}</div>
         </div>
-        <div class="hero-stat">
+        <div class="hero-stat" data-field="stat_2_num" data-tab="stats">
           <div class="hero-stat-num">{{STAT_2_NUM}}</div>
           <div class="hero-stat-label">{{STAT_2_LABEL}}</div>
         </div>
-        <div class="hero-stat">
+        <div class="hero-stat" data-field="stat_3_num" data-tab="stats">
           <div class="hero-stat-num">{{STAT_3_NUM}}</div>
           <div class="hero-stat-label">{{STAT_3_LABEL}}</div>
         </div>
-        <div class="hero-stat">
+        <div class="hero-stat" data-field="stat_4_num" data-tab="stats">
           <div class="hero-stat-num">{{STAT_4_NUM}}</div>
           <div class="hero-stat-label">{{STAT_4_LABEL}}</div>
         </div>
@@ -2250,48 +2250,36 @@
       <p class="section-sub">CMG's Mortgage Academy is nationally recognized. You'll be licensed, certified, and pipeline-ready before you take your first live borrower call.</p>
 
       <div class="training-grid">
-        <div class="training-card">
-          <div class="training-week">Weeks 1–2</div>
-          <h3>Industry Foundations</h3>
-          <p>Understand mortgages end-to-end — loan types, rates, credit, and the SC housing market.</p>
+        <div class="training-card" data-field="training_1_title" data-tab="training">
+          <div class="training-week">{{TRAINING_1_WEEK}}</div>
+          <h3>{{TRAINING_1_TITLE}}</h3>
+          <p>{{TRAINING_1_DESC}}</p>
           <div class="training-list">
-            <div class="training-list-item">NMLS pre-licensing education (fully paid by CMG)</div>
-            <div class="training-list-item">SC mortgage law and compliance overview</div>
-            <div class="training-list-item">Full product catalog deep dive</div>
-            <div class="training-list-item">Shadowing licensed LOs on live calls</div>
+            {{TRAINING_1_ITEMS}}
           </div>
         </div>
-        <div class="training-card">
-          <div class="training-week">Weeks 3–4</div>
-          <h3>Sales Skills &amp; Scripts</h3>
-          <p>Build your frameworks. Practice until they feel natural. CMG's playbook is built from 10,000+ SC conversations.</p>
+        <div class="training-card" data-field="training_2_title" data-tab="training">
+          <div class="training-week">{{TRAINING_2_WEEK}}</div>
+          <h3>{{TRAINING_2_TITLE}}</h3>
+          <p>{{TRAINING_2_DESC}}</p>
           <div class="training-list">
-            <div class="training-list-item">Call recording and live coaching feedback</div>
-            <div class="training-list-item">Complete objection handling library</div>
-            <div class="training-list-item">Pre-qualification scripting techniques</div>
-            <div class="training-list-item">Daily role-play with your cohort</div>
+            {{TRAINING_2_ITEMS}}
           </div>
         </div>
-        <div class="training-card">
-          <div class="training-week">Weeks 5–6</div>
-          <h3>CRM &amp; Technology Mastery</h3>
-          <p>Learn every tool you'll use daily — so technology accelerates you instead of slowing you down.</p>
+        <div class="training-card" data-field="training_3_title" data-tab="training">
+          <div class="training-week">{{TRAINING_3_WEEK}}</div>
+          <h3>{{TRAINING_3_TITLE}}</h3>
+          <p>{{TRAINING_3_DESC}}</p>
           <div class="training-list">
-            <div class="training-list-item">Encompass LOS certification</div>
-            <div class="training-list-item">Salesforce pipeline management</div>
-            <div class="training-list-item">Lead routing and prioritization</div>
-            <div class="training-list-item">Automated follow-up sequences</div>
+            {{TRAINING_3_ITEMS}}
           </div>
         </div>
-        <div class="training-card">
-          <div class="training-week">Weeks 7–8</div>
-          <h3>Live Pipeline Launch</h3>
-          <p>You're licensed, trained, and ready. Work real leads with a senior coach in your corner.</p>
+        <div class="training-card" data-field="training_4_title" data-tab="training">
+          <div class="training-week">{{TRAINING_4_WEEK}}</div>
+          <h3>{{TRAINING_4_TITLE}}</h3>
+          <p>{{TRAINING_4_DESC}}</p>
           <div class="training-list">
-            <div class="training-list-item">First live borrower conversations</div>
-            <div class="training-list-item">First closed loan milestone bonus</div>
-            <div class="training-list-item">90-day personalized coaching plan</div>
-            <div class="training-list-item">Full team integration and onboarding</div>
+            {{TRAINING_4_ITEMS}}
           </div>
         </div>
       </div>
@@ -3445,6 +3433,21 @@
     });
     wrap.style.display = 'block';
   }
+</script>
+<script>
+/* Website Builder click-to-edit — only runs when page is inside iframe */
+(function(){
+  if(window.self===window.top)return;
+  var s=document.createElement('style');
+  s.textContent='[data-field]{cursor:pointer}[data-field]:hover{outline:2px dashed rgba(106,170,38,0.55);outline-offset:3px;border-radius:2px}';
+  document.head.appendChild(s);
+  document.addEventListener('click',function(e){
+    var el=e.target.closest('[data-field]');
+    if(!el)return;
+    e.preventDefault();e.stopPropagation();
+    window.parent.postMessage({type:'wb-field-click',field:el.dataset.field,tab:el.dataset.tab||'hero'},'*');
+  },true);
+})();
 </script>
 </body>
 </html>

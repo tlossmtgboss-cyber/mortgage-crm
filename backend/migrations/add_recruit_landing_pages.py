@@ -38,6 +38,22 @@ _CALLCENTER_CONFIG = {
     "contact_phone_tel": "+18438344997",
     "branch_address": "975 Johnnie Dodds Blvd. Suite A, Mt. Pleasant, SC 29464",
     "branch_nmls": "1594871",
+    "training_1_week": "Weeks 1–2",
+    "training_1_title": "Industry Foundations",
+    "training_1_desc": "Understand mortgages end-to-end — loan types, rates, credit, and the SC housing market.",
+    "training_1_items": "NMLS pre-licensing education (fully paid by CMG)\nSC mortgage law and compliance overview\nFull product catalog deep dive\nShadowing licensed LOs on live calls",
+    "training_2_week": "Weeks 3–4",
+    "training_2_title": "Sales Skills & Scripts",
+    "training_2_desc": "Build your frameworks. Practice until they feel natural. CMG's playbook is built from 10,000+ SC conversations.",
+    "training_2_items": "Call recording and live coaching feedback\nComplete objection handling library\nPre-qualification scripting techniques\nDaily role-play with your cohort",
+    "training_3_week": "Weeks 5–6",
+    "training_3_title": "CRM & Technology Mastery",
+    "training_3_desc": "Learn every tool you'll use daily — so technology accelerates you instead of slowing you down.",
+    "training_3_items": "Encompass LOS certification\nSalesforce pipeline management\nLead routing and prioritization\nAutomated follow-up sequences",
+    "training_4_week": "Weeks 7–8",
+    "training_4_title": "Live Pipeline Launch",
+    "training_4_desc": "You're licensed, trained, and ready. Work real leads with a senior coach in your corner.",
+    "training_4_items": "First live borrower conversations\nFirst closed loan milestone bonus\n90-day personalized coaching plan\nFull team integration and onboarding",
 }
 
 

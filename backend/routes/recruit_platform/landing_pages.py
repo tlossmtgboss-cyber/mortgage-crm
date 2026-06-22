@@ -174,6 +174,18 @@ def _render(config: dict, org_slug: str, page_slug: str) -> str:
         "{{PAGE_SLUG}}": page_slug,
     }
 
+    # Training cards — items are newline-delimited, render as list-item divs
+    for n in ("1", "2", "3", "4"):
+        items_text = config.get(f"training_{n}_items", "")
+        items_html = "".join(
+            f'<div class="training-list-item">{line.strip()}</div>'
+            for line in items_text.split("\n") if line.strip()
+        )
+        subs[f"{{{{TRAINING_{n}_WEEK}}}}"] = config.get(f"training_{n}_week", "")
+        subs[f"{{{{TRAINING_{n}_TITLE}}}}"] = config.get(f"training_{n}_title", "")
+        subs[f"{{{{TRAINING_{n}_DESC}}}}"] = config.get(f"training_{n}_desc", "")
+        subs[f"{{{{TRAINING_{n}_ITEMS}}}}"] = items_html
+
     for placeholder, value in subs.items():
         html = html.replace(placeholder, value)
 

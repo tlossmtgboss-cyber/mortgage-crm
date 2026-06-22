@@ -48,6 +48,22 @@ const DEFAULT_CONFIG = {
   branch_name: 'CMG Home Loans',
   branch_address: '975 Johnnie Dodds Blvd. Suite A, Mt. Pleasant, SC 29464',
   branch_nmls: '1594871',
+  training_1_week: 'Weeks 1–2',
+  training_1_title: 'Industry Foundations',
+  training_1_desc: 'Understand mortgages end-to-end — loan types, rates, credit, and the SC housing market.',
+  training_1_items: 'NMLS pre-licensing education (fully paid by CMG)\nSC mortgage law and compliance overview\nFull product catalog deep dive\nShadowing licensed LOs on live calls',
+  training_2_week: 'Weeks 3–4',
+  training_2_title: 'Sales Skills & Scripts',
+  training_2_desc: "Build your frameworks. Practice until they feel natural. CMG's playbook is built from 10,000+ SC conversations.",
+  training_2_items: 'Call recording and live coaching feedback\nComplete objection handling library\nPre-qualification scripting techniques\nDaily role-play with your cohort',
+  training_3_week: 'Weeks 5–6',
+  training_3_title: 'CRM & Technology Mastery',
+  training_3_desc: "Learn every tool you'll use daily — so technology accelerates you instead of slowing you down.",
+  training_3_items: 'Encompass LOS certification\nSalesforce pipeline management\nLead routing and prioritization\nAutomated follow-up sequences',
+  training_4_week: 'Weeks 7–8',
+  training_4_title: 'Live Pipeline Launch',
+  training_4_desc: "You're licensed, trained, and ready. Work real leads with a senior coach in your corner.",
+  training_4_items: 'First live borrower conversations\nFirst closed loan milestone bonus\n90-day personalized coaching plan\nFull team integration and onboarding',
 };
 
 const TABS = [
@@ -56,6 +72,7 @@ const TABS = [
   { id: 'earnings', label: 'Earnings' },
   { id: 'stats', label: 'Stats' },
   { id: 'manager', label: 'Manager' },
+  { id: 'training', label: 'Training' },
 ];
 
 export default function WebsiteBuilder() {
@@ -118,6 +135,25 @@ export default function WebsiteBuilder() {
   useEffect(() => {
     if (selectedId) loadPreview(selectedId);
   }, [selectedId, loadPreview]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.data || e.data.type !== 'wb-field-click') return;
+      const { field, tab } = e.data;
+      if (tab) setActiveTab(tab);
+      setTimeout(() => {
+        const el = document.querySelector(`[data-field="${field}"]`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.focus();
+          el.style.outline = '2px solid #6AAA26';
+          setTimeout(() => { el.style.outline = ''; }, 1500);
+        }
+      }, 100);
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   const selectPage = (page) => {
     setSelectedId(page.id);
@@ -354,6 +390,7 @@ export default function WebsiteBuilder() {
               {activeTab === 'earnings' && <EarningsTab config={config} onChange={handleConfigChange} />}
               {activeTab === 'stats'    && <StatsTab    config={config} onChange={handleConfigChange} />}
               {activeTab === 'manager'  && <ManagerTab  config={config} onChange={handleConfigChange} />}
+              {activeTab === 'training' && <TrainingTab config={config} onChange={handleConfigChange} />}
             </div>
           </>
         )}
@@ -498,11 +535,13 @@ function IconExternalLink() {
 
 // ─── Tab components ───────────────────────────────────────────────────────────
 
-function Field({ label, value, onChange, type = 'text', hint }) {
+function Field({ label, value, onChange, type = 'text', hint, id }) {
   return (
     <div className="wb-form-group">
       <label>{label}</label>
       <input
+        id={id}
+        data-field={id}
         className="wb-input"
         type={type}
         value={value || ''}
@@ -513,11 +552,13 @@ function Field({ label, value, onChange, type = 'text', hint }) {
   );
 }
 
-function TextArea({ label, value, onChange, hint, rows = 3 }) {
+function TextArea({ label, value, onChange, hint, rows = 3, id }) {
   return (
     <div className="wb-form-group">
       <label>{label}</label>
       <textarea
+        id={id}
+        data-field={id}
         className="wb-input wb-textarea"
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
@@ -533,6 +574,7 @@ function HeroTab({ config, onChange }) {
     <div className="wb-tab-section">
       <h4>Headline</h4>
       <TextArea
+        id="hero_headline"
         label="Hero Headline (HTML allowed)"
         value={config.hero_headline}
         onChange={(v) => onChange('hero_headline', v)}
@@ -540,6 +582,7 @@ function HeroTab({ config, onChange }) {
         rows={3}
       />
       <Field
+        id="hero_headline_plain"
         label="Page Title (plain text, for browser tab)"
         value={config.hero_headline_plain}
         onChange={(v) => onChange('hero_headline_plain', v)}
@@ -547,6 +590,7 @@ function HeroTab({ config, onChange }) {
       />
       <h4>Subheadline</h4>
       <TextArea
+        id="hero_subheadline"
         label="Hero Subheadline (HTML allowed)"
         value={config.hero_subheadline}
         onChange={(v) => onChange('hero_subheadline', v)}
@@ -555,6 +599,7 @@ function HeroTab({ config, onChange }) {
       />
       <h4>Location</h4>
       <Field
+        id="location_display"
         label="Location Display"
         value={config.location_display}
         onChange={(v) => onChange('location_display', v)}
@@ -611,10 +656,10 @@ function EarningsTab({ config, onChange }) {
   return (
     <div className="wb-tab-section">
       <h4>Earnings Figures</h4>
-      <Field label="Year 1 OTE" value={config.year1_range} onChange={(v) => onChange('year1_range', v)} hint="e.g. $65–90K" />
-      <Field label="Year 2 Top Performer" value={config.year2_top} onChange={(v) => onChange('year2_top', v)} hint="e.g. $120,000+" />
-      <Field label="Senior LO" value={config.senior_lo} onChange={(v) => onChange('senior_lo', v)} hint="e.g. $180,000+" />
-      <Field label="Team Lead / Manager" value={config.team_lead} onChange={(v) => onChange('team_lead', v)} hint="e.g. $250,000+" />
+      <Field id="year1_range" label="Year 1 OTE" value={config.year1_range} onChange={(v) => onChange('year1_range', v)} hint="e.g. $65–90K" />
+      <Field id="year2_top" label="Year 2 Top Performer" value={config.year2_top} onChange={(v) => onChange('year2_top', v)} hint="e.g. $120,000+" />
+      <Field id="senior_lo" label="Senior LO" value={config.senior_lo} onChange={(v) => onChange('senior_lo', v)} hint="e.g. $180,000+" />
+      <Field id="team_lead" label="Team Lead / Manager" value={config.team_lead} onChange={(v) => onChange('team_lead', v)} hint="e.g. $250,000+" />
     </div>
   );
 }
@@ -626,11 +671,13 @@ function StatsTab({ config, onChange }) {
       {[1, 2, 3, 4].map((n) => (
         <div key={n} className="wb-stat-row">
           <Field
+            id={`stat_${n}_num`}
             label={`Stat ${n} — Number`}
             value={config[`stat_${n}_num`]}
             onChange={(v) => onChange(`stat_${n}_num`, v)}
           />
           <Field
+            id={`stat_${n}_label`}
             label={`Stat ${n} — Label`}
             value={config[`stat_${n}_label`]}
             onChange={(v) => onChange(`stat_${n}_label`, v)}
@@ -660,6 +707,54 @@ function ManagerTab({ config, onChange }) {
       <Field label="Branch Name" value={config.branch_name} onChange={(v) => onChange('branch_name', v)} />
       <Field label="Branch Address" value={config.branch_address} onChange={(v) => onChange('branch_address', v)} />
       <Field label="Branch NMLS#" value={config.branch_nmls} onChange={(v) => onChange('branch_nmls', v)} />
+    </div>
+  );
+}
+
+function TrainingCard({ n, config, onChange }) {
+  return (
+    <div className="wb-training-card-editor">
+      <div className="wb-training-card-header">
+        <Field
+          id={`training_${n}_week`}
+          label="Week Range"
+          value={config[`training_${n}_week`]}
+          onChange={(v) => onChange(`training_${n}_week`, v)}
+          hint="e.g. Weeks 1–2"
+        />
+        <Field
+          id={`training_${n}_title`}
+          label="Card Title"
+          value={config[`training_${n}_title`]}
+          onChange={(v) => onChange(`training_${n}_title`, v)}
+        />
+      </div>
+      <TextArea
+        id={`training_${n}_desc`}
+        label="Description"
+        value={config[`training_${n}_desc`]}
+        onChange={(v) => onChange(`training_${n}_desc`, v)}
+        rows={2}
+      />
+      <TextArea
+        id={`training_${n}_items`}
+        label="Bullet Points (one per line)"
+        value={config[`training_${n}_items`]}
+        onChange={(v) => onChange(`training_${n}_items`, v)}
+        rows={4}
+      />
+    </div>
+  );
+}
+
+function TrainingTab({ config, onChange }) {
+  return (
+    <div className="wb-tab-section">
+      <h4>Training Program Cards</h4>
+      <p className="wb-hint" style={{ marginBottom: 16 }}>Click any training card in the preview to jump here. Edit each card's title, description, and bullet points.</p>
+      {[1, 2, 3, 4].map((n) => (
+        <TrainingCard key={n} n={n} config={config} onChange={onChange} />
+      ))}
     </div>
   );
 }

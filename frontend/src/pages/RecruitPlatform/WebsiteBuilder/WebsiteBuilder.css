@@ -522,3 +522,16 @@
   justify-content: flex-end;
   margin-top: 20px;
 }
+
+.wb-training-card-editor {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: #fafafa;
+}
+.wb-training-card-header {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 12px;
+}
