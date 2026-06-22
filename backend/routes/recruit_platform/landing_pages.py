@@ -226,6 +226,7 @@ def list_landing_pages(
     if not org_id:
         raise HTTPException(status_code=403, detail="No organization")
 
+    db.execute(text(f"SET LOCAL app.current_tenant = '{org_id}'"))
     rows = db.execute(
         text("""
             SELECT id, organization_id, title, slug, status, config,
@@ -241,6 +242,8 @@ def list_landing_pages(
     if not rows:
         try:
             _auto_seed_callcenter(db, org_id)
+            # Re-set tenant context after commit (SET LOCAL is cleared on commit)
+            db.execute(text(f"SET LOCAL app.current_tenant = '{org_id}'"))
             rows = db.execute(
                 text("""
                     SELECT id, organization_id, title, slug, status, config,

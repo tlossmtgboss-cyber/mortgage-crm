@@ -70,9 +70,6 @@ def run_migration(engine=None) -> None:
             CREATE INDEX IF NOT EXISTS ix_recruit_lp_status
                 ON recruit_landing_pages (status);
 
-            ALTER TABLE recruit_landing_pages ENABLE ROW LEVEL SECURITY;
-            ALTER TABLE recruit_landing_pages NO FORCE ROW LEVEL SECURITY;
-
             DO $$ BEGIN
                 IF NOT EXISTS (
                     SELECT 1 FROM information_schema.table_constraints
@@ -84,21 +81,6 @@ def run_migration(engine=None) -> None:
                     UNIQUE (organization_id, slug);
                 END IF;
             END $$;
-
-            DROP POLICY IF EXISTS recruit_lp_tenant_isolation ON recruit_landing_pages;
-            CREATE POLICY recruit_lp_tenant_isolation ON recruit_landing_pages
-                USING (
-                    organization_id = (
-                        SELECT id FROM organizations
-                        WHERE slug = current_setting('app.current_tenant', TRUE)
-                        LIMIT 1
-                    )
-                );
-
-            DROP POLICY IF EXISTS recruit_lp_public_read ON recruit_landing_pages;
-            CREATE POLICY recruit_lp_public_read ON recruit_landing_pages
-                FOR SELECT
-                USING (status = 'published');
         """))
 
         conn.commit()

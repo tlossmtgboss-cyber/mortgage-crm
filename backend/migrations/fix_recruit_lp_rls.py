@@ -42,33 +42,13 @@ def run_migration(engine=None) -> None:
             logger.info("[SKIP] recruit_landing_pages table does not exist yet")
             return
 
-        # Remove FORCE ROW LEVEL SECURITY — Railway connects as the table owner,
-        # so FORCE RLS causes the broken policies to block ALL queries.
-        # App-layer isolation (WHERE organization_id = :oid on every query) is sufficient.
-        conn.execute(text("ALTER TABLE recruit_landing_pages NO FORCE ROW LEVEL SECURITY"))
-        logger.info("[RLS] Removed FORCE ROW LEVEL SECURITY from recruit_landing_pages")
-
-        # Keep RLS enabled with clean policies (still enforced for non-owner roles)
+        # Fully disable RLS — app-layer isolation (WHERE organization_id = :oid on
+        # every query) is sufficient. DISABLE RLS removes all policy checks and FORCE
+        # RLS in one shot, avoiding the slug-vs-integer policy confusion entirely.
+        conn.execute(text("ALTER TABLE recruit_landing_pages DISABLE ROW LEVEL SECURITY"))
         conn.execute(text("DROP POLICY IF EXISTS recruit_lp_tenant_isolation ON recruit_landing_pages"))
-        conn.execute(text("""
-            CREATE POLICY recruit_lp_tenant_isolation ON recruit_landing_pages
-            FOR ALL
-            USING (
-                organization_id::text = NULLIF(current_setting('app.current_tenant', TRUE), '')
-            )
-            WITH CHECK (
-                organization_id::text = NULLIF(current_setting('app.current_tenant', TRUE), '')
-            )
-        """))
-        logger.info("[RLS] Created integer-based recruit_lp_tenant_isolation policy")
-
         conn.execute(text("DROP POLICY IF EXISTS recruit_lp_public_read ON recruit_landing_pages"))
-        conn.execute(text("""
-            CREATE POLICY recruit_lp_public_read ON recruit_landing_pages
-            FOR SELECT
-            USING (status = 'published')
-        """))
-        logger.info("[RLS] Recreated recruit_lp_public_read policy")
+        logger.info("[RLS] Disabled RLS on recruit_landing_pages (app-layer isolation used)")
 
     logger.info("✅ fix_recruit_lp_rls complete")
 
