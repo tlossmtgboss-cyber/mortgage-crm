@@ -463,6 +463,57 @@ def seed_callcenter_page(
 
 
 # ---------------------------------------------------------------------------
+# Diagnostic endpoint — returns DB state for debugging
+# ---------------------------------------------------------------------------
+
+@landing_pages_router.get("/diag")
+def diag_landing_pages(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return raw DB state to diagnose why list returns empty."""
+    import os as _os
+    org_id = getattr(current_user, "organization_id", None)
+    user_id = getattr(current_user, "id", None)
+    user_role = getattr(current_user, "role", None)
+
+    # Raw count bypassing org filter
+    total_rows = db.execute(text("SELECT COUNT(*) FROM recruit_landing_pages")).scalar()
+    # Rows for this user's org
+    org_rows = db.execute(
+        text("SELECT id, organization_id, slug, status FROM recruit_landing_pages WHERE organization_id = :oid"),
+        {"oid": org_id},
+    ).fetchall()
+    # All org_ids in table
+    all_orgs_in_table = db.execute(
+        text("SELECT DISTINCT organization_id FROM recruit_landing_pages ORDER BY organization_id")
+    ).fetchall()
+    # Current app.current_tenant value
+    try:
+        tenant_val = db.execute(text("SELECT current_setting('app.current_tenant', TRUE)")).scalar()
+    except Exception:
+        tenant_val = "error"
+    # Force RLS status
+    try:
+        force_rls = db.execute(text(
+            "SELECT relforcerowsecurity FROM pg_class WHERE relname = 'recruit_landing_pages'"
+        )).scalar()
+    except Exception:
+        force_rls = "error"
+
+    return {
+        "user_id": user_id,
+        "user_org_id": org_id,
+        "user_role": user_role,
+        "total_rows_in_table": total_rows,
+        "rows_for_your_org": [dict(id=r[0], org_id=r[1], slug=r[2], status=r[3]) for r in org_rows],
+        "all_org_ids_in_table": [r[0] for r in all_orgs_in_table],
+        "app_current_tenant": tenant_val,
+        "force_row_level_security": force_rls,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Admin seed endpoint (no CRM auth — uses X-Admin-Key header)
 # ---------------------------------------------------------------------------
 
