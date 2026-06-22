@@ -230,7 +230,7 @@ function FollowUpBossIntegrationPage() {
     try {
       const data = await syncApi.triggerSync(100);
       setSyncResult(data);
-      toast.success(`Sync complete: ${data.created || 0} created, ${data.updated || 0} updated`);
+      toast.success(`Sync complete: ${data.leads_created || 0} created, ${data.leads_updated || 0} updated`);
       await loadSyncHistory();
       await loadLeadMappings();
     } catch (err) {
@@ -699,10 +699,10 @@ function FollowUpBossIntegrationPage() {
           {syncResult && (
             <div className="fub-sync-results">
               <div className="fub-sync-result-item success">
-                <strong>{syncResult.created || 0}</strong> leads created
+                <strong>{syncResult.leads_created || 0}</strong> leads created
               </div>
               <div className="fub-sync-result-item info">
-                <strong>{syncResult.updated || 0}</strong> leads updated
+                <strong>{syncResult.leads_updated || 0}</strong> leads updated
               </div>
               {syncResult.errors > 0 && (
                 <div className="fub-sync-result-item error">

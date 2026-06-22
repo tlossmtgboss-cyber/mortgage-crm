@@ -172,11 +172,20 @@ class FollowUpBossSyncService:
     # INBOUND SYNC (FUB → CRM)
     # =========================================================================
 
+    def _get_user_org_id(self, user_id: int) -> Optional[int]:
+        """Look up organization_id for a user (needed for Lead creation)."""
+        row = self.db.execute(
+            text("SELECT organization_id FROM users WHERE id = :uid"),
+            {"uid": user_id}
+        ).fetchone()
+        return row[0] if row else None
+
     def sync_person_to_lead(
         self,
         connection: FUBUserConnection,
         fub_person: Dict,
-        event_type: str = "manual_sync"
+        event_type: str = "manual_sync",
+        organization_id: Optional[int] = None,
     ) -> Tuple[Optional[int], bool]:
         """
         Sync FUB person to CRM lead.
@@ -185,6 +194,7 @@ class FollowUpBossSyncService:
             connection: FUB connection
             fub_person: Person data from FUB
             event_type: Type of sync event
+            organization_id: Org ID for the new lead (required; looked up if not provided)
 
         Returns:
             Tuple of (lead_id, is_new)
@@ -196,6 +206,10 @@ class FollowUpBossSyncService:
         if not fub_person_id:
             logger.error("FUB person has no ID")
             return None, False
+
+        # Resolve org ID — required for Lead.organization_id NOT NULL constraint
+        if organization_id is None:
+            organization_id = self._get_user_org_id(connection.user_id)
 
         # Log sync event
         sync_event = FUBSyncEvent(
@@ -228,8 +242,8 @@ class FollowUpBossSyncService:
                     mapping = None
 
             if is_new:
-                # Create new lead
-                lead = Lead(owner_id=connection.user_id)
+                # Create new lead — organization_id is required (NOT NULL)
+                lead = Lead(owner_id=connection.user_id, organization_id=organization_id)
                 self.db.add(lead)
                 self.db.flush()
 
@@ -665,14 +679,17 @@ class FollowUpBossSyncService:
         }
 
         try:
+            # Look up org_id once — avoids per-lead query and satisfies NOT NULL constraint
+            org_id = self._get_user_org_id(connection.user_id)
+
             offset = 0
             page_size = min(limit, 100)  # FUB API max per page
 
             while stats["total"] < limit:
+                # Fetch all people in account (no user filter) — FUB admin accounts own all contacts
                 result = client.get_people(
                     limit=page_size,
                     offset=offset,
-                    assigned_to=connection.fub_user_id,
                 )
 
                 people = result.get("people", [])
@@ -680,11 +697,16 @@ class FollowUpBossSyncService:
                     break  # No more results
 
                 for person in people:
-                    lead_id, is_new = self.sync_person_to_lead(
-                        connection,
-                        person,
-                        event_type=FUBEventType.MANUAL_SYNC.value
-                    )
+                    try:
+                        lead_id, is_new = self.sync_person_to_lead(
+                            connection,
+                            person,
+                            event_type=FUBEventType.MANUAL_SYNC.value,
+                            organization_id=org_id,
+                        )
+                    except Exception as person_err:
+                        logger.exception(f"Unexpected error syncing FUB person {person.get('id')}: {person_err}")
+                        lead_id, is_new = None, False
 
                     if lead_id:
                         if is_new:

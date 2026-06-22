@@ -248,7 +248,7 @@ class FollowUpBossClient:
         }
 
         if assigned_to:
-            params["assignedUserId"] = assigned_to
+            params["userId"] = assigned_to
         if updated_since:
             params["updatedAfter"] = updated_since.isoformat()
         if stage:

@@ -854,6 +854,9 @@ def _run_critical_schema_migrations():
             ("last_modified_by_ai", "BOOLEAN DEFAULT FALSE"),
             # COMP-004: GDPR PII retention with automated expiry
             ("data_retention_expires_at", "TIMESTAMP"),
+            # Follow Up Boss sync
+            ("fub_person_id", "INTEGER"),
+            ("fub_last_synced_at", "TIMESTAMP"),
         ]
         leads_added = 0
         for col_name, col_type in lead_columns:
