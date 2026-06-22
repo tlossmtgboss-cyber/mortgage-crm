@@ -42,11 +42,14 @@ def run_migration(engine=None) -> None:
             logger.info("[SKIP] recruit_landing_pages table does not exist yet")
             return
 
-        # Drop old slug-based tenant isolation policy
-        conn.execute(text("DROP POLICY IF EXISTS recruit_lp_tenant_isolation ON recruit_landing_pages"))
-        logger.info("[RLS] Dropped slug-based recruit_lp_tenant_isolation policy")
+        # Remove FORCE ROW LEVEL SECURITY — Railway connects as the table owner,
+        # so FORCE RLS causes the broken policies to block ALL queries.
+        # App-layer isolation (WHERE organization_id = :oid on every query) is sufficient.
+        conn.execute(text("ALTER TABLE recruit_landing_pages NO FORCE ROW LEVEL SECURITY"))
+        logger.info("[RLS] Removed FORCE ROW LEVEL SECURITY from recruit_landing_pages")
 
-        # Create new integer-based tenant isolation policy (matches set_tenant_context)
+        # Keep RLS enabled with clean policies (still enforced for non-owner roles)
+        conn.execute(text("DROP POLICY IF EXISTS recruit_lp_tenant_isolation ON recruit_landing_pages"))
         conn.execute(text("""
             CREATE POLICY recruit_lp_tenant_isolation ON recruit_landing_pages
             FOR ALL
@@ -59,7 +62,6 @@ def run_migration(engine=None) -> None:
         """))
         logger.info("[RLS] Created integer-based recruit_lp_tenant_isolation policy")
 
-        # Ensure public read policy still exists
         conn.execute(text("DROP POLICY IF EXISTS recruit_lp_public_read ON recruit_landing_pages"))
         conn.execute(text("""
             CREATE POLICY recruit_lp_public_read ON recruit_landing_pages

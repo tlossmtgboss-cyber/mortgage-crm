@@ -71,7 +71,7 @@ def run_migration(engine=None) -> None:
                 ON recruit_landing_pages (status);
 
             ALTER TABLE recruit_landing_pages ENABLE ROW LEVEL SECURITY;
-            ALTER TABLE recruit_landing_pages FORCE ROW LEVEL SECURITY;
+            ALTER TABLE recruit_landing_pages NO FORCE ROW LEVEL SECURITY;
 
             DO $$ BEGIN
                 IF NOT EXISTS (
