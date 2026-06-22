@@ -2,11 +2,13 @@
 Recruit Platform — Applicant management endpoints.
 Tenant-scoped by current_user.organization_id.
 """
+import json
 import logging
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from db import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -60,7 +62,6 @@ async def create_applicant(body: CreateApplicantBody, current_user=_CU):
         talent_profile = {}
         if body.nmls_number:
             talent_profile["nmls_number"] = body.nmls_number
-        import json
         row = db.execute(text("""
             INSERT INTO mm_candidates
                 (organization_id, first_name, last_name, email, phone,
@@ -89,6 +90,13 @@ async def create_applicant(body: CreateApplicantBody, current_user=_CU):
             "email": row[3], "phone": row[4], "status": row[5],
             "source": row[6], "created_at": row[7].isoformat() if row[7] else None,
         }
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="A candidate with this email already exists in your organization.")
+    except Exception as e:
+        db.rollback()
+        logger.exception("create_applicant failed: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to create candidate.")
     finally:
         db.close()
 

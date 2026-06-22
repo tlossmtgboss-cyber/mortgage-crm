@@ -188,6 +188,15 @@ function AddCandidateModal({ recruitToken, onClose, onAdded }) {
 
   const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
+  const handlePhoneChange = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+    let formatted = digits;
+    if (digits.length > 6) formatted = `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
+    else if (digits.length > 3) formatted = `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+    else if (digits.length > 0) formatted = `(${digits}`;
+    set('phone', formatted);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.first_name.trim() || !form.last_name.trim() || !form.email.trim()) {
@@ -250,7 +259,7 @@ function AddCandidateModal({ recruitToken, onClose, onAdded }) {
           <div className="rd-modal-row">
             <div className="rd-modal-field">
               <label className="rd-field-label">Phone</label>
-              <input className="rd-input" type="tel" value={form.phone} onChange={e => set('phone', e.target.value)} />
+              <input className="rd-input" type="tel" value={form.phone} onChange={handlePhoneChange} placeholder="(843) 555-1234" />
             </div>
             <div className="rd-modal-field">
               <label className="rd-field-label">NMLS #</label>
