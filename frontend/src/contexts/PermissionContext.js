@@ -174,6 +174,16 @@ export const PermissionProvider = ({ children }) => {
           // Ignore localStorage errors
         }
       } else if (type === 'login') {
+        // Clear view-as-role and role-preview state from the previous session.
+        // These are NOT cleared by clearTokens() and must be reset at login time
+        // so an admin's "view as user" mode from before the timeout doesn't carry
+        // into (or out of) the new session.
+        setViewAsRole(null);
+        setRolePreview(null);
+        try {
+          localStorage.removeItem('viewAsRole');
+          localStorage.removeItem('role_preview');
+        } catch (e) { /* ignore */ }
         // Re-fetch permissions on login
         fetchPermissions();
       }
@@ -270,22 +280,20 @@ export const PermissionProvider = ({ children }) => {
 
     } catch (error) {
       console.error('PermissionContext: Error fetching permissions:', error);
-      // When API fails, infer role from localStorage user object if userRole is still default
-      // This prevents admin users from losing access when the permissions API is down
-      if (userRole === 'sales') {
-        try {
-          const userStr = localStorage.getItem('user');
-          if (userStr) {
-            const user = JSON.parse(userStr);
-            if (user.permission_role) {
-              setUserRole(user.permission_role);
-            } else if (user.is_admin === true || user.role === 'admin') {
-              setUserRole('admin');
-            }
+      // When API fails, infer role from the current session's user object (written at
+      // login time by setAuth). Always override — not just when userRole === 'sales' —
+      // so a stale 'admin' from a previous session doesn't persist when a non-admin logs in
+      // and the permissions endpoint is temporarily down.
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user.permission_role) {
+            setUserRole(user.permission_role);
           }
-        } catch (e) {
-          // Ignore localStorage errors
         }
+      } catch (e) {
+        // Ignore localStorage errors
       }
     } finally {
       setLoading(false);

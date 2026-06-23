@@ -666,7 +666,6 @@ async def get_user_permissions_endpoint(
         current_permission_role = getattr(user, 'permission_role', None)
         if current_permission_role not in ('admin', 'site_admin'):
             is_admin_user = (
-                user.email in ('admin@perenniaai.com', 'tloss@cmgfi.com') or
                 getattr(user, 'is_admin', False) or
                 getattr(user, 'role', '') == 'admin'
             )

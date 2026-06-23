@@ -431,8 +431,13 @@ api.interceptors.response.use(
           return api.request(error.config);
         }
 
-        // Refresh failed — clear auth from ALL storage locations and redirect
+        // Refresh failed — clear auth from ALL storage locations and redirect.
+        // Dispatch logout event synchronously BEFORE the hard redirect so that
+        // PermissionContext clears stale role keys (userRole, viewAsRole, role_preview,
+        // etc.) from localStorage. Without this dispatch those keys survived the
+        // clearTokens() call and could bleed an old admin role into the next session.
         clearTokens().catch(() => {});
+        window.dispatchEvent(new CustomEvent('authChange', { detail: { type: 'logout' } }));
         window.location.href = '/login';
       }
 
