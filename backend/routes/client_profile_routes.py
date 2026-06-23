@@ -1868,6 +1868,22 @@ async def get_referral_partners(
                 # Rollback the failed statement so subsequent queries work
                 db.rollback()
 
+            # last_contact: prefer last_interaction; fall back to created_at so
+            # newly created partners never show "999 days" in Aria Recommends.
+            _last_ts = partner.last_interaction or partner.created_at
+            _last_contact_str = _last_ts.isoformat() if _last_ts else None
+
+            # has_new_application: any SUBMITTED (not yet reviewed) builder apps
+            _has_new_app = False
+            try:
+                from database.models.builder_application import BuilderApplication as _BA
+                _has_new_app = db.query(_BA).filter(
+                    _BA.partner_id == partner.id,
+                    _BA.status == "SUBMITTED",
+                ).limit(1).count() > 0
+            except Exception:
+                pass
+
             result.append({
                 "id": partner.id,
                 "name": partner.name,
@@ -1882,8 +1898,9 @@ async def get_referral_partners(
                 "partner_category": partner.partner_category or "individual",
                 "status": partner.status,
                 "created_at": partner.created_at,
-                "last_contact": partner.last_interaction.isoformat() if partner.last_interaction else None,
-                "last_referral": partner.last_interaction.isoformat() if partner.last_interaction else None,
+                "last_contact": _last_contact_str,
+                "last_referral": _last_contact_str,
+                "has_new_application": _has_new_app,
             })
 
         return result

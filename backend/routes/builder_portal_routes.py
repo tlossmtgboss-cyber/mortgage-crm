@@ -533,8 +533,21 @@ async def submit_builder_application(
     app.application_data = body.application_data
     app.signature_data = body.signature_data
     app.status = "SUBMITTED"
-    app.submitted_at = datetime.now(timezone.utc)
-    app.updated_at = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    app.submitted_at = now
+    app.updated_at = now
+
+    # Stamp last_interaction on the partner so the Aria Recommends widget
+    # shows today's date rather than null → 999 days.
+    if app.partner_id:
+        try:
+            from database.models.referral import ReferralPartner as _RP
+            _partner = db.query(_RP).filter(_RP.id == app.partner_id).first()
+            if _partner:
+                _partner.last_interaction = now
+        except Exception as _e:
+            logger.warning(f"Could not stamp last_interaction on partner {app.partner_id}: {_e}")
+
     db.commit()
 
     try:

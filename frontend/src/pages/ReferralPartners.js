@@ -53,6 +53,10 @@ function generateAIRecommendation(partner) {
   const tier = (partner.loyalty_tier || '').toLowerCase();
   const closeRate = partner.referrals_in ? Math.round((partner.closed_loans / partner.referrals_in) * 100) : 0;
 
+  if (partner.has_new_application) {
+    return { priority: 'high', reason: 'New builder application submitted — review and approve to move this relationship forward.' };
+  }
+
   if (daysSinceContact > 30 && tier === 'gold') {
     return { priority: 'high', reason: `Gold partner — no contact in ${daysSinceContact} days. High-value relationship at risk.` };
   }
