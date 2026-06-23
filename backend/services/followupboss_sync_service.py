@@ -9,6 +9,7 @@ Handles bidirectional sync between FUB and CRM:
 """
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Tuple
 from difflib import SequenceMatcher
@@ -39,6 +40,17 @@ from models.followupboss_models import (
 )
 
 logger = logging.getLogger(__name__)
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _strip_html(text: str) -> str:
+    """Strip HTML tags and collapse whitespace from FUB note bodies."""
+    if not text:
+        return text
+    clean = _HTML_TAG_RE.sub(" ", text)
+    return _WHITESPACE_RE.sub(" ", clean).strip()
 
 
 class FollowUpBossSyncService:
@@ -425,13 +437,13 @@ class FollowUpBossSyncService:
         self.db.flush()
 
         try:
-            # Create activity
+            # Create activity — strip HTML from FUB note body before storing
             activity = Activity(
                 type=ActivityType.NOTE,
                 organization_id=org_id,
                 lead_id=mapping.lead_id,
                 user_id=connection.user_id,
-                content=fub_note.get("body", ""),
+                content=_strip_html(fub_note.get("body", "") or ""),
             )
 
             # Store FUB note ID in metadata
@@ -719,7 +731,7 @@ class FollowUpBossSyncService:
                 organization_id=org_id,
                 lead_id=lead_id,
                 user_id=connection.user_id,
-                content=fub_event.get("description") or fub_event.get("body") or "",
+                content=_strip_html(fub_event.get("description") or fub_event.get("body") or ""),
             )
             activity.user_metadata = {
                 "fub_event_id": fub_event_id,

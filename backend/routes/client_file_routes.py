@@ -5,9 +5,19 @@ Wired under /api/v1 via inline_legacy_routes.py.
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, List, Optional
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"\s+")
+
+
+def _strip_html(text: str) -> str:
+    if not text:
+        return text
+    return _WS_RE.sub(" ", _HTML_TAG_RE.sub(" ", text)).strip()
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -652,7 +662,7 @@ def list_timeline(
                     event_category=cat_map.get(a.type, "activity"),
                     occurred_at=a.created_at,
                     headline=a.type.value if a.type else "Activity",
-                    body=a.content,
+                    body=_strip_html(a.content) if a.content else None,
                     actor_user_id=str(a.user_id) if a.user_id else None,
                 ))
         except Exception as e:
