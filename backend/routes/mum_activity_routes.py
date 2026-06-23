@@ -10,7 +10,7 @@ Includes:
 
 Lines ~20814-21293 from inline_legacy_routes.py.
 """
-from fastapi import Depends, HTTPException
+from fastapi import BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -473,8 +473,25 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
     # ACTIVITIES CRUD
     # ============================================================================
 
+    def _push_note_to_fub(activity_id: int, org_id: int) -> None:
+        """Background task: push a CRM note to FUB if the lead is linked."""
+        try:
+            from db import get_db_with_tenant
+            from services.followupboss_sync_service import FollowUpBossSyncService
+            with get_db_with_tenant(org_id) as _db:
+                sync_svc = FollowUpBossSyncService(_db)
+                sync_svc.sync_activity_to_fub(activity_id)
+        except Exception:
+            logger.exception(f"Background FUB note push failed for activity {activity_id}")
+
     @app.post("/api/v1/activities/", response_model=ActivityResponse, status_code=201)
-    async def create_activity(activity: ActivityCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    async def create_activity(
+        activity: ActivityCreate,
+        background_tasks: BackgroundTasks,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+    ):
+        from database.enums import ActivityType
         db_activity = Activity(
             **activity.model_dump(),
             user_id=current_user.id
@@ -497,6 +514,12 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
             if mum_client:
                 mum_client.last_contact = datetime.now(timezone.utc)
                 db.commit()
+
+        # Push notes to FUB in background (only for NOTE type tied to a FUB-linked lead)
+        if activity.lead_id and db_activity.type == ActivityType.NOTE:
+            org_id = getattr(current_user, 'organization_id', None)
+            if org_id:
+                background_tasks.add_task(_push_note_to_fub, db_activity.id, org_id)
 
         logger.info(f"Activity created: {db_activity.type.value}")
         return db_activity

@@ -64,6 +64,49 @@ const DEFAULT_CONFIG = {
   training_4_title: 'Live Pipeline Launch',
   training_4_desc: "You're licensed, trained, and ready. Work real leads with a senior coach in your corner.",
   training_4_items: 'First live borrower conversations\nFirst closed loan milestone bonus\n90-day personalized coaching plan\nFull team integration and onboarding',
+  // Hero checks
+  hero_check_1: 'No mortgage license required to start — CMG pays for it',
+  hero_check_2: 'Warm, pre-qualified leads delivered to your pipeline daily',
+  hero_check_3: 'Fully paid 8-week training program with live coaching',
+  hero_check_4: 'Competitive base + uncapped commission from day one',
+  // Earnings card labels
+  earnings_label: 'Year 1 On-Target Earnings',
+  earnings_note: 'base salary + commission',
+  // Career path
+  career_title: 'A real path forward —<br>not just another job.',
+  career_sub: 'Every CMG loan officer in South Carolina starts at the same place. Where you go depends entirely on your drive and coachability.',
+  career_1_timeline: 'Month 1–2', career_1_title: 'Loan Officer Trainee',
+  career_1_desc: 'Paid training. Learn products, systems, compliance, and SC market dynamics.',
+  career_1_salary: '$45K base',
+  career_2_timeline: 'Month 3–12', career_2_title: 'Junior Loan Officer',
+  career_2_desc: 'Live warm leads. Building pipeline. Coached on every deal you work.',
+  career_2_salary: '$65–90K OTE',
+  career_3_timeline: 'Year 2–3', career_3_title: 'Senior Loan Officer',
+  career_3_desc: 'Referral network. Complex purchase loans. Mentoring incoming hires.',
+  career_3_salary: '$120–180K OTE',
+  career_4_timeline: 'Year 3+', career_4_title: 'Team Lead / Branch Mgr',
+  career_4_desc: 'Build and lead your own team. Override income. Equity in the platform.',
+  career_4_salary: '$250K+ OTE',
+  // Training section headers
+  training_section_title: 'Eight weeks that change<br>your career trajectory.',
+  training_section_sub: "CMG's Mortgage Academy is nationally recognized. You'll be licensed, certified, and pipeline-ready before you take your first live borrower call.",
+  // Testimonials
+  testimonials_html: '',
+  // Video / manager
+  video_label: '3-minute message from our Regional Director',
+  video_headline: '“We built this team to create careers, not fill seats.”',
+  video_body: "<p>When we opened the South Carolina call center, the goal wasn't volume — it was building a team of mortgage professionals who'd still be here, and thriving, five years from now.</p>\n<p>Watch this short message to hear what our top performers have in common and what your first 90 days will actually look like.</p>",
+  // CTA
+  cta_headline: 'Your application takes under 3 minutes.',
+  cta_body: 'No cover letter. No lengthy questionnaire. Just your name, phone, and a bit about yourself. A recruiter will be in touch within one business day.',
+  cta_btn: 'Apply Now — It’s Free →',
+  // Other pages
+  why_hero_headline: 'The platform that lets<br>great producers <span>win.</span>',
+  why_hero_body: "Tools, leads, coaching, and culture. Here's why CMG loan officers outperform the market — and why they stay.",
+  apply_sidebar_headline: 'Tell us about <span>yourself.</span>',
+  apply_sidebar_body: "Your application takes under 3 minutes. No resume required to start. A recruiter will contact you within one business day — and you'll schedule your intro call right here.",
+  // Footer
+  footer_legal: '',
 };
 
 const TABS = [
@@ -71,8 +114,13 @@ const TABS = [
   { id: 'branding', label: 'Branding' },
   { id: 'earnings', label: 'Earnings' },
   { id: 'stats', label: 'Stats' },
+  { id: 'career', label: 'Career Path' },
   { id: 'manager', label: 'Manager' },
   { id: 'training', label: 'Training' },
+  { id: 'cta', label: 'CTA' },
+  { id: 'pages', label: 'Pages 2–4' },
+  { id: 'content', label: 'Testimonials' },
+  { id: 'footer', label: 'Footer' },
 ];
 
 export default function WebsiteBuilder() {
@@ -385,12 +433,17 @@ export default function WebsiteBuilder() {
             </div>
 
             <div className="wb-tab-content">
-              {activeTab === 'hero'     && <HeroTab     config={config} onChange={handleConfigChange} />}
-              {activeTab === 'branding' && <BrandingTab config={config} onChange={handleConfigChange} />}
-              {activeTab === 'earnings' && <EarningsTab config={config} onChange={handleConfigChange} />}
-              {activeTab === 'stats'    && <StatsTab    config={config} onChange={handleConfigChange} />}
-              {activeTab === 'manager'  && <ManagerTab  config={config} onChange={handleConfigChange} />}
-              {activeTab === 'training' && <TrainingTab config={config} onChange={handleConfigChange} />}
+              {activeTab === 'hero'       && <HeroTab       config={config} onChange={handleConfigChange} />}
+              {activeTab === 'branding'   && <BrandingTab   config={config} onChange={handleConfigChange} />}
+              {activeTab === 'earnings'   && <EarningsTab   config={config} onChange={handleConfigChange} />}
+              {activeTab === 'stats'      && <StatsTab      config={config} onChange={handleConfigChange} />}
+              {activeTab === 'career'     && <CareerTab     config={config} onChange={handleConfigChange} />}
+              {activeTab === 'manager'    && <ManagerTab    config={config} onChange={handleConfigChange} />}
+              {activeTab === 'training'   && <TrainingTab   config={config} onChange={handleConfigChange} />}
+              {activeTab === 'cta'        && <CtaTab        config={config} onChange={handleConfigChange} />}
+              {activeTab === 'pages'      && <PagesTab      config={config} onChange={handleConfigChange} />}
+              {activeTab === 'content'    && <ContentTab    config={config} onChange={handleConfigChange} />}
+              {activeTab === 'footer'     && <FooterTab     config={config} onChange={handleConfigChange} />}
             </div>
           </>
         )}
@@ -605,6 +658,11 @@ function HeroTab({ config, onChange }) {
         onChange={(v) => onChange('location_display', v)}
         hint="Shown in the hero eyebrow — e.g. Charleston, SC"
       />
+      <h4>Hero Checklist (4 bullets under headline)</h4>
+      <Field id="hero_check_1" label="Check 1" value={config.hero_check_1} onChange={(v) => onChange('hero_check_1', v)} />
+      <Field id="hero_check_2" label="Check 2" value={config.hero_check_2} onChange={(v) => onChange('hero_check_2', v)} />
+      <Field id="hero_check_3" label="Check 3" value={config.hero_check_3} onChange={(v) => onChange('hero_check_3', v)} />
+      <Field id="hero_check_4" label="Check 4" value={config.hero_check_4} onChange={(v) => onChange('hero_check_4', v)} />
     </div>
   );
 }
@@ -655,6 +713,9 @@ function BrandingTab({ config, onChange }) {
 function EarningsTab({ config, onChange }) {
   return (
     <div className="wb-tab-section">
+      <h4>Earnings Card Label</h4>
+      <Field id="earnings_label" label="Card Label" value={config.earnings_label} onChange={(v) => onChange('earnings_label', v)} hint="e.g. Year 1 On-Target Earnings" />
+      <Field id="earnings_note" label="Card Note" value={config.earnings_note} onChange={(v) => onChange('earnings_note', v)} hint="e.g. base salary + commission" />
       <h4>Earnings Figures</h4>
       <Field id="year1_range" label="Year 1 OTE" value={config.year1_range} onChange={(v) => onChange('year1_range', v)} hint="e.g. $65–90K" />
       <Field id="year2_top" label="Year 2 Top Performer" value={config.year2_top} onChange={(v) => onChange('year2_top', v)} hint="e.g. $120,000+" />
@@ -707,6 +768,10 @@ function ManagerTab({ config, onChange }) {
       <Field label="Branch Name" value={config.branch_name} onChange={(v) => onChange('branch_name', v)} />
       <Field label="Branch Address" value={config.branch_address} onChange={(v) => onChange('branch_address', v)} />
       <Field label="Branch NMLS#" value={config.branch_nmls} onChange={(v) => onChange('branch_nmls', v)} />
+      <h4>Video Section</h4>
+      <Field id="video_label" label="Video Label" value={config.video_label} onChange={(v) => onChange('video_label', v)} hint="e.g. 3-minute message from our Regional Director" />
+      <Field id="video_headline" label="Video Headline" value={config.video_headline} onChange={(v) => onChange('video_headline', v)} />
+      <TextArea id="video_body" label="Video Body (HTML allowed)" value={config.video_body} onChange={(v) => onChange('video_body', v)} rows={5} hint="Wrap paragraphs in <p>…</p>" />
     </div>
   );
 }
@@ -750,11 +815,95 @@ function TrainingCard({ n, config, onChange }) {
 function TrainingTab({ config, onChange }) {
   return (
     <div className="wb-tab-section">
+      <h4>Section Header</h4>
+      <Field id="training_section_title" label="Section Title (HTML allowed)" value={config.training_section_title} onChange={(v) => onChange('training_section_title', v)} hint="Use <br> for line breaks" />
+      <TextArea id="training_section_sub" label="Section Subtitle" value={config.training_section_sub} onChange={(v) => onChange('training_section_sub', v)} rows={3} />
       <h4>Training Program Cards</h4>
       <p className="wb-hint" style={{ marginBottom: 16 }}>Click any training card in the preview to jump here. Edit each card's title, description, and bullet points.</p>
       {[1, 2, 3, 4].map((n) => (
         <TrainingCard key={n} n={n} config={config} onChange={onChange} />
       ))}
+    </div>
+  );
+}
+
+function CareerTab({ config, onChange }) {
+  return (
+    <div className="wb-tab-section">
+      <h4>Section Header</h4>
+      <Field id="career_title" label="Section Title (HTML allowed)" value={config.career_title} onChange={(v) => onChange('career_title', v)} hint="Use <br> for line breaks" />
+      <TextArea id="career_sub" label="Section Subtitle" value={config.career_sub} onChange={(v) => onChange('career_sub', v)} rows={3} />
+      <h4>Career Path Steps</h4>
+      {[1, 2, 3, 4].map((n) => (
+        <div key={n} className="wb-training-card-editor">
+          <div className="wb-training-card-header">
+            <Field id={`career_${n}_timeline`} label="Timeline" value={config[`career_${n}_timeline`]} onChange={(v) => onChange(`career_${n}_timeline`, v)} hint="e.g. Month 1–2" />
+            <Field id={`career_${n}_title`} label="Step Title" value={config[`career_${n}_title`]} onChange={(v) => onChange(`career_${n}_title`, v)} />
+          </div>
+          <TextArea id={`career_${n}_desc`} label="Description" value={config[`career_${n}_desc`]} onChange={(v) => onChange(`career_${n}_desc`, v)} rows={2} />
+          <Field id={`career_${n}_salary`} label="Salary / OTE" value={config[`career_${n}_salary`]} onChange={(v) => onChange(`career_${n}_salary`, v)} hint="e.g. $45K base" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CtaTab({ config, onChange }) {
+  return (
+    <div className="wb-tab-section">
+      <h4>Page 1 — CTA Banner</h4>
+      <Field id="cta_headline" label="CTA Headline" value={config.cta_headline} onChange={(v) => onChange('cta_headline', v)} />
+      <TextArea id="cta_body" label="CTA Body" value={config.cta_body} onChange={(v) => onChange('cta_body', v)} rows={3} />
+      <Field id="cta_btn" label="Button Text" value={config.cta_btn} onChange={(v) => onChange('cta_btn', v)} hint="e.g. Apply Now — It's Free →" />
+    </div>
+  );
+}
+
+function PagesTab({ config, onChange }) {
+  return (
+    <div className="wb-tab-section">
+      <h4>Page 2 — Why CMG Hero</h4>
+      <Field id="why_hero_headline" label="Headline (HTML allowed)" value={config.why_hero_headline} onChange={(v) => onChange('why_hero_headline', v)} hint='Use <span>text</span> for green accent, <br> for breaks' />
+      <TextArea id="why_hero_body" label="Body" value={config.why_hero_body} onChange={(v) => onChange('why_hero_body', v)} rows={3} />
+      <h4>Page 4 — Apply Sidebar</h4>
+      <Field id="apply_sidebar_headline" label="Sidebar Headline (HTML allowed)" value={config.apply_sidebar_headline} onChange={(v) => onChange('apply_sidebar_headline', v)} hint='Use <span>text</span> for green accent' />
+      <TextArea id="apply_sidebar_body" label="Sidebar Body" value={config.apply_sidebar_body} onChange={(v) => onChange('apply_sidebar_body', v)} rows={3} />
+    </div>
+  );
+}
+
+function ContentTab({ config, onChange }) {
+  return (
+    <div className="wb-tab-section">
+      <h4>Testimonials</h4>
+      <p className="wb-hint" style={{ marginBottom: 12 }}>
+        Paste raw HTML for the testimonial cards. Each card uses:<br />
+        <code style={{ fontSize: 11 }}>&lt;div class="tcard"&gt;&lt;div class="tcard-stars"&gt;★★★★★&lt;/div&gt;&lt;div class="tcard-quote"&gt;…&lt;/div&gt;&lt;div class="tcard-author"&gt;&lt;div class="tcard-avatar" style="background:#6AAA26"&gt;AB&lt;/div&gt;&lt;div&gt;&lt;div class="tcard-name"&gt;Name&lt;/div&gt;&lt;div class="tcard-detail"&gt;Role&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;</code>
+      </p>
+      <TextArea
+        id="testimonials_html"
+        label="Testimonials HTML"
+        value={config.testimonials_html}
+        onChange={(v) => onChange('testimonials_html', v)}
+        rows={14}
+        hint="Leave blank to hide the section entirely"
+      />
+    </div>
+  );
+}
+
+function FooterTab({ config, onChange }) {
+  return (
+    <div className="wb-tab-section">
+      <h4>Footer Legal Disclaimer</h4>
+      <TextArea
+        id="footer_legal"
+        label="Legal Disclaimer (HTML allowed)"
+        value={config.footer_legal}
+        onChange={(v) => onChange('footer_legal', v)}
+        rows={8}
+        hint="Shown in the footer. Use <a href=…> for links. Leave blank to hide."
+      />
     </div>
   );
 }

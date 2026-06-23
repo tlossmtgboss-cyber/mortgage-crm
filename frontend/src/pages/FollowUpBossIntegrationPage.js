@@ -705,8 +705,13 @@ function FollowUpBossIntegrationPage() {
                 <strong>{syncResult.leads_updated || 0}</strong> leads updated
               </div>
               {syncResult.errors > 0 && (
-                <div className="fub-sync-result-item error">
-                  <strong>{syncResult.errors}</strong> errors
+                <div
+                  className="fub-sync-result-item error"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setActiveSection('history')}
+                  title="Click to view error details in History"
+                >
+                  <strong>{syncResult.errors}</strong> errors — <span style={{ textDecoration: 'underline', fontSize: '12px' }}>view details</span>
                 </div>
               )}
             </div>

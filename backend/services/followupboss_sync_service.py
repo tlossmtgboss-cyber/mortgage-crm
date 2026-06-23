@@ -650,6 +650,54 @@ class FollowUpBossSyncService:
                 self.db.rollback()
             return False
 
+    def _sync_fub_event_to_activity(
+        self,
+        connection: FUBUserConnection,
+        fub_event: Dict,
+        lead_id: int,
+    ) -> None:
+        """Sync a single FUB event (Email/SMS/Call) to a CRM Activity, deduplicating by fub_event_id."""
+        from database.enums import ActivityType
+        from database.models import Activity
+
+        fub_event_id = fub_event.get("id")
+        event_type_str = fub_event.get("type", "")
+
+        type_map = {
+            "Email": ActivityType.EMAIL,
+            "SMS": ActivityType.SMS,
+            "Call": ActivityType.CALL,
+        }
+        activity_type = type_map.get(event_type_str)
+        if not activity_type:
+            return
+
+        # Deduplicate: skip if already imported
+        existing = self.db.query(Activity).filter(
+            Activity.lead_id == lead_id,
+            Activity.user_metadata["fub_event_id"].as_string() == str(fub_event_id)
+        ).first()
+        if existing:
+            return
+
+        try:
+            activity = Activity(
+                type=activity_type,
+                lead_id=lead_id,
+                user_id=connection.user_id,
+                content=fub_event.get("description") or fub_event.get("body") or "",
+            )
+            activity.user_metadata = {
+                "fub_event_id": fub_event_id,
+                "fub_event_type": event_type_str,
+                "synced_from": "followupboss",
+            }
+            self.db.add(activity)
+            self.db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to create activity for FUB event {fub_event_id}: {e}")
+            self.db.rollback()
+
     # =========================================================================
     # FULL SYNC
     # =========================================================================
@@ -697,6 +745,7 @@ class FollowUpBossSyncService:
                     break  # No more results
 
                 for person in people:
+                    fub_person_id = person.get("id")
                     try:
                         lead_id, is_new = self.sync_person_to_lead(
                             connection,
@@ -705,7 +754,7 @@ class FollowUpBossSyncService:
                             organization_id=org_id,
                         )
                     except Exception as person_err:
-                        logger.exception(f"Unexpected error syncing FUB person {person.get('id')}: {person_err}")
+                        logger.exception(f"Unexpected error syncing FUB person {fub_person_id}: {person_err}")
                         lead_id, is_new = None, False
 
                     if lead_id:
@@ -713,6 +762,29 @@ class FollowUpBossSyncService:
                             stats["created"] += 1
                         else:
                             stats["updated"] += 1
+
+                        # Pull notes for this person and sync to CRM activities
+                        if fub_person_id and connection.sync_notes:
+                            try:
+                                notes_result = client.get_notes(person_id=fub_person_id, limit=50)
+                                for note in notes_result.get("notes", []):
+                                    self.sync_note_to_activity(connection, note)
+                            except Exception as notes_err:
+                                logger.warning(f"Failed to sync notes for FUB person {fub_person_id}: {notes_err}")
+
+                        # Pull email/SMS/call events for this person
+                        if fub_person_id:
+                            for event_type_str in ("Email", "SMS", "Call"):
+                                try:
+                                    events_result = client.get_events(
+                                        person_id=fub_person_id,
+                                        event_type=event_type_str,
+                                        limit=20,
+                                    )
+                                    for event in events_result.get("events", []):
+                                        self._sync_fub_event_to_activity(connection, event, lead_id)
+                                except Exception as ev_err:
+                                    logger.warning(f"Failed to sync {event_type_str} events for FUB person {fub_person_id}: {ev_err}")
                     else:
                         stats["errors"] += 1
 
