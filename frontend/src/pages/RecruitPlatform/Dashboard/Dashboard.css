@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: #f1f5f9;
 }
@@ -507,4 +507,92 @@
   justify-content: flex-end;
   gap: 10px;
   padding-top: 4px;
+}
+
+/* List view */
+.rd-list-section {
+  margin: 0 24px 32px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.rd-list-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.rd-list-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.rd-list-count {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.rd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rd-table thead th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  background: #f8fafc;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.rd-table-row {
+  cursor: pointer;
+  border-bottom: 1px solid #f8fafc;
+  transition: background 0.1s;
+}
+
+.rd-table-row:last-child {
+  border-bottom: none;
+}
+
+.rd-table-row:hover {
+  background: #f8fafc;
+}
+
+.rd-table-row td {
+  padding: 11px 16px;
+  color: #334155;
+  vertical-align: middle;
+}
+
+.rd-table-name {
+  font-weight: 500;
+  color: #0f172a !important;
+}
+
+.rd-stage-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #eff7e1;
+  color: #578F1E;
+}
+
+.rd-table-empty {
+  text-align: center;
+  padding: 32px;
+  color: #94a3b8;
+  font-size: 13px;
 }

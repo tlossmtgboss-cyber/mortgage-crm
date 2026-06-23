@@ -419,6 +419,42 @@ export default function RecruitDashboard() {
         </div>
       )}
 
+      {/* List view */}
+      {!loading && (
+        <div className="rd-list-section">
+          <div className="rd-list-header">
+            <span className="rd-list-title">All Candidates</span>
+            <span className="rd-list-count">{filtered.length} total</span>
+          </div>
+          <table className="rd-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Stage</th>
+                <th>Source</th>
+                <th>Applied</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr><td colSpan={6} className="rd-table-empty">No candidates found</td></tr>
+              ) : filtered.map(a => (
+                <tr key={a.id} className="rd-table-row" onClick={() => setSelected(a)}>
+                  <td className="rd-table-name">{a.first_name} {a.last_name}</td>
+                  <td>{a.email}</td>
+                  <td>{a.phone || '—'}</td>
+                  <td><span className="rd-stage-pill">{COLUMNS.find(c => c.key === a.status)?.label || a.status}</span></td>
+                  <td>{a.source || '—'}</td>
+                  <td>{formatDate(a.applied_at || a.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {selected && (
         <ApplicantDetail
           applicant={selected}
