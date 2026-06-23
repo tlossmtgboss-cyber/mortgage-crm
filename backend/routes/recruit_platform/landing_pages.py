@@ -685,9 +685,16 @@ def admin_seed_callcenter(x_admin_key: str = Header(...)):
 # Public endpoints
 # ---------------------------------------------------------------------------
 
+_SPA_RESERVED = {"login", "register", "forgot-password", "reset-password", "dashboard", "recruit"}
+_RECRUIT_BASE = "https://recruit.perenniaai.com"
+
 @landing_pages_public_router.get("/careers/{slug}")
 @landing_pages_public_router.get("/p/{slug}")
 def serve_landing_page(slug: str, db: Session = Depends(get_db)):
+    from fastapi.responses import RedirectResponse
+    if slug in _SPA_RESERVED:
+        return RedirectResponse(url=f"{_RECRUIT_BASE}/recruit/{slug}", status_code=302)
+
     row = db.execute(
         text("""
             SELECT rp.id, rp.slug, rp.config,
