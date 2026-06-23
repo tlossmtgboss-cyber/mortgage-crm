@@ -54,6 +54,50 @@ _CALLCENTER_CONFIG = {
     "training_4_title": "Live Pipeline Launch",
     "training_4_desc": "You're licensed, trained, and ready. Work real leads with a senior coach in your corner.",
     "training_4_items": "First live borrower conversations\nFirst closed loan milestone bonus\n90-day personalized coaching plan\nFull team integration and onboarding",
+    # Hero checks
+    "hero_check_1": "No mortgage license required to start — CMG pays for it",
+    "hero_check_2": "Warm, pre-qualified leads delivered to your pipeline daily",
+    "hero_check_3": "Fully paid 8-week training program with live coaching",
+    "hero_check_4": "Competitive base + uncapped commission from day one",
+    # Earnings card labels
+    "earnings_label": "Year 1 On-Target Earnings",
+    "earnings_note": "base salary + commission",
+    # Career path section
+    "career_title": "A real path forward —<br>not just another job.",
+    "career_sub": "Every CMG loan officer in South Carolina starts at the same place. Where you go depends entirely on your drive and coachability.",
+    "career_1_timeline": "Month 1–2", "career_1_title": "Loan Officer Trainee",
+    "career_1_desc": "Paid training. Learn products, systems, compliance, and SC market dynamics.",
+    "career_1_salary": "$45K base",
+    "career_2_timeline": "Month 3–12", "career_2_title": "Junior Loan Officer",
+    "career_2_desc": "Live warm leads. Building pipeline. Coached on every deal you work.",
+    "career_2_salary": "$65–90K OTE",
+    "career_3_timeline": "Year 2–3", "career_3_title": "Senior Loan Officer",
+    "career_3_desc": "Referral network. Complex purchase loans. Mentoring incoming hires.",
+    "career_3_salary": "$120–180K OTE",
+    "career_4_timeline": "Year 3+", "career_4_title": "Team Lead / Branch Mgr",
+    "career_4_desc": "Build and lead your own team. Override income. Equity in the platform.",
+    "career_4_salary": "$250K+ OTE",
+    # Training section headers
+    "training_section_title": "Eight weeks that change<br>your career trajectory.",
+    "training_section_sub": "CMG’s Mortgage Academy is nationally recognized. You’ll be licensed, certified, and pipeline-ready before you take your first live borrower call.",
+    # Testimonials (raw HTML)
+    "testimonials_html": '<div class="tcard"><div class="tcard-stars">★★★★★</div><div class="tcard-quote">I waited tables for six years before CMG. The training alone was worth more than any course I ever took. I closed $97,000 in my first full year and I had zero finance background.</div><div class="tcard-author"><div class="tcard-avatar" style="background: var(--cmg-navy);">JM</div><div><div class="tcard-name">Jordan M.</div><div class="tcard-detail">Former server → Senior LO, Year 2</div></div></div></div><div class="tcard"><div class="tcard-stars">★★★★★</div><div class="tcard-quote">My DISC assessment placed me in purchase loans — exactly where my personality thrives. I\'m now team lead at 26. The career path CMG lays out is real and they actually hold up their end.</div><div class="tcard-author"><div class="tcard-avatar" style="background: var(--cmg-red);">AL</div><div><div class="tcard-name">Ashley L.</div><div class="tcard-detail">Team Lead, Charleston branch</div></div></div></div><div class="tcard"><div class="tcard-stars">★★★★★</div><div class="tcard-quote">I came from retail banking and thought I knew mortgages. CMG\'s training showed me how much I didn\'t know — and how to close at twice the rate. Best career move I\'ve made.</div><div class="tcard-author"><div class="tcard-avatar" style="background: var(--green);">RC</div><div><div class="tcard-name">Rafael C.</div><div class="tcard-detail">Former bank teller → $145K Year 3</div></div></div></div>',
+    # Video / manager section
+    "video_label": "3-minute message from our Regional Director",
+    "video_headline": "“We built this team to create careers, not fill seats.”",
+    "video_body": "<p>When we opened the South Carolina call center, the goal wasn’t volume — it was building a team of mortgage professionals who’d still be here, and thriving, five years from now.</p>\n<p>Watch this short message to hear what our top performers have in common and what your first 90 days will actually look like.</p>",
+    # CTA section
+    "cta_headline": "Your application takes under 3 minutes.",
+    "cta_body": "No cover letter. No lengthy questionnaire. Just your name, phone, and a bit about yourself. A recruiter will be in touch within one business day.",
+    "cta_btn": "Apply Now — It’s Free →",
+    # Page 2 — Why CMG hero
+    "why_hero_headline": "The platform that lets<br>great producers <span>win.</span>",
+    "why_hero_body": "Tools, leads, coaching, and culture. Here’s why CMG loan officers outperform the market — and why they stay.",
+    # Page 4 — Apply sidebar
+    "apply_sidebar_headline": "Tell us about <span>yourself.</span>",
+    "apply_sidebar_body": "Your application takes under 3 minutes. No resume required to start. A recruiter will contact you within one business day — and you’ll schedule your intro call right here.",
+    # Footer legal disclaimer
+    "footer_legal": 'CMG Mortgage, Inc., NMLS ID# 1820 (For licensing information, go to <a href="https://www.nmlsconsumeraccess.org" target="_blank" style="color:rgba(255,255,255,0.45);text-decoration:underline;">www.nmlsconsumeraccess.org</a>). Equal Housing Opportunity. Licensed by the Department of Financial Protection and Innovation (DFPI) under the California Residential Mortgage Lending Act No. 4150025.; AZ #0903132; Colorado regulated by the Division of Real Estate; Georgia Residential Mortgage Licensee #15438; Mortgage Servicer License No. MS068. Hawaii Mortgage Loan Originator Company License No. HI-1820. Massachusetts Mortgage Lender License #MC1820 and Mortgage Broker License #MC1820; Mississippi Licensed Mortgage Company Licensed by the Mississippi Department of Banking and Consumer Finance; Licensed by the New Hampshire Banking Department; Licensed by the NJ Department of Banking and Insurance; Licensed Mortgage Banker – NYS Department of Financial Services; Ohio Mortgage Broker Act Mortgage Banker Exemption #MBMB.850204.000; Rhode Island Licensed Lender #20142986LL; Registered Mortgage Banker with the Texas Department of Savings and Mortgage Lending, and Licensed by the Virginia State Corporation Commission #MC-5521. CMG Mortgage, Inc. is licensed in all 50 states, the District of Columbia, Guam, Puerto Rico, and the Virgin Islands (<a href="https://www.cmgfi.com/corporate/licensing" target="_blank" style="color:rgba(255,255,255,0.45);text-decoration:underline;">https://www.cmgfi.com/corporate/licensing</a>).',
 }
 
 

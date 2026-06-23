@@ -2147,10 +2147,10 @@
         <div data-field="hero_subheadline" data-tab="hero">{{HERO_SUBHEADLINE}}</div>
 
         <div class="hero-checks">
-          <div class="hero-check"><span class="check-icon">✓</span>No mortgage license required to start — CMG pays for it</div>
-          <div class="hero-check"><span class="check-icon">✓</span>Warm, pre-qualified leads delivered to your pipeline daily</div>
-          <div class="hero-check"><span class="check-icon">✓</span>Fully paid 8-week training program with live coaching</div>
-          <div class="hero-check"><span class="check-icon">✓</span>Competitive base + uncapped commission from day one</div>
+          <div class="hero-check" data-field="hero_check_1" data-tab="hero"><span class="check-icon">✓</span>{{HERO_CHECK_1}}</div>
+          <div class="hero-check" data-field="hero_check_2" data-tab="hero"><span class="check-icon">✓</span>{{HERO_CHECK_2}}</div>
+          <div class="hero-check" data-field="hero_check_3" data-tab="hero"><span class="check-icon">✓</span>{{HERO_CHECK_3}}</div>
+          <div class="hero-check" data-field="hero_check_4" data-tab="hero"><span class="check-icon">✓</span>{{HERO_CHECK_4}}</div>
         </div>
 
         <div class="hero-btns">
@@ -2160,9 +2160,9 @@
       </div>
 
       <div class="earnings-card">
-        <div class="earnings-label">Year 1 On-Target Earnings</div>
+        <div class="earnings-label" data-field="earnings_label" data-tab="earnings">{{EARNINGS_LABEL}}</div>
         <div class="earnings-figure" data-field="year1_range" data-tab="earnings">{{YEAR1_RANGE}}</div>
-        <div class="earnings-note">base salary + commission</div>
+        <div class="earnings-note" data-field="earnings_note" data-tab="earnings">{{EARNINGS_NOTE}}</div>
 
         <div class="earnings-rows">
           <div class="earnings-row" data-field="year2_top" data-tab="earnings">
@@ -2206,38 +2206,38 @@
   <!-- Career Path -->
   <div class="section">
     <div class="section-eyebrow">Career Trajectory</div>
-    <h2 class="section-title">A real path forward —<br>not just another job.</h2>
-    <p class="section-sub">Every CMG loan officer in South Carolina starts at the same place. Where you go depends entirely on your drive and coachability.</p>
+    <h2 class="section-title" data-field="career_title" data-tab="career">{{CAREER_TITLE}}</h2>
+    <p class="section-sub" data-field="career_sub" data-tab="career">{{CAREER_SUB}}</p>
 
     <div class="path-track">
       <div class="path-connector"></div>
-      <div class="path-step">
+      <div class="path-step" data-field="career_1_title" data-tab="career">
         <div class="path-node">🎓</div>
-        <div class="path-timeline">Month 1–2</div>
-        <h3>Loan Officer Trainee</h3>
-        <p>Paid training. Learn products, systems, compliance, and SC market dynamics.</p>
-        <div class="path-salary">$45K base</div>
+        <div class="path-timeline">{{CAREER_1_TIMELINE}}</div>
+        <h3>{{CAREER_1_TITLE}}</h3>
+        <p>{{CAREER_1_DESC}}</p>
+        <div class="path-salary">{{CAREER_1_SALARY}}</div>
       </div>
-      <div class="path-step">
+      <div class="path-step" data-field="career_2_title" data-tab="career">
         <div class="path-node">📞</div>
-        <div class="path-timeline">Month 3–12</div>
-        <h3>Junior Loan Officer</h3>
-        <p>Live warm leads. Building pipeline. Coached on every deal you work.</p>
-        <div class="path-salary">$65–90K OTE</div>
+        <div class="path-timeline">{{CAREER_2_TIMELINE}}</div>
+        <h3>{{CAREER_2_TITLE}}</h3>
+        <p>{{CAREER_2_DESC}}</p>
+        <div class="path-salary">{{CAREER_2_SALARY}}</div>
       </div>
-      <div class="path-step">
+      <div class="path-step" data-field="career_3_title" data-tab="career">
         <div class="path-node">🏆</div>
-        <div class="path-timeline">Year 2–3</div>
-        <h3>Senior Loan Officer</h3>
-        <p>Referral network. Complex purchase loans. Mentoring incoming hires.</p>
-        <div class="path-salary">$120–180K OTE</div>
+        <div class="path-timeline">{{CAREER_3_TIMELINE}}</div>
+        <h3>{{CAREER_3_TITLE}}</h3>
+        <p>{{CAREER_3_DESC}}</p>
+        <div class="path-salary">{{CAREER_3_SALARY}}</div>
       </div>
-      <div class="path-step">
+      <div class="path-step" data-field="career_4_title" data-tab="career">
         <div class="path-node">🚀</div>
-        <div class="path-timeline">Year 3+</div>
-        <h3>Team Lead / Branch Mgr</h3>
-        <p>Build and lead your own team. Override income. Equity in the platform.</p>
-        <div class="path-salary">$250K+ OTE</div>
+        <div class="path-timeline">{{CAREER_4_TIMELINE}}</div>
+        <h3>{{CAREER_4_TITLE}}</h3>
+        <p>{{CAREER_4_DESC}}</p>
+        <div class="path-salary">{{CAREER_4_SALARY}}</div>
       </div>
     </div>
   </div>
@@ -2246,8 +2246,8 @@
   <div style="background: var(--gray-50); padding: 80px 0;">
     <div class="section" style="padding-top: 0; padding-bottom: 0;">
       <div class="section-eyebrow">Training Program</div>
-      <h2 class="section-title">Eight weeks that change<br>your career trajectory.</h2>
-      <p class="section-sub">CMG's Mortgage Academy is nationally recognized. You'll be licensed, certified, and pipeline-ready before you take your first live borrower call.</p>
+      <h2 class="section-title" data-field="training_section_title" data-tab="training">{{TRAINING_SECTION_TITLE}}</h2>
+      <p class="section-sub" data-field="training_section_sub" data-tab="training">{{TRAINING_SECTION_SUB}}</p>
 
       <div class="training-grid">
         <div class="training-card" data-field="training_1_title" data-tab="training">
@@ -2291,40 +2291,8 @@
     <div class="section-eyebrow">Real People. Real Results.</div>
     <h2 class="section-title">From zero mortgage experience<br>to top producers.</h2>
 
-    <div class="testimonials-row">
-      <div class="tcard">
-        <div class="tcard-stars">★★★★★</div>
-        <div class="tcard-quote">I waited tables for six years before CMG. The training alone was worth more than any course I ever took. I closed $97,000 in my first full year and I had zero finance background.</div>
-        <div class="tcard-author">
-          <div class="tcard-avatar" style="background: var(--cmg-navy);">JM</div>
-          <div>
-            <div class="tcard-name">Jordan M.</div>
-            <div class="tcard-detail">Former server → Senior LO, Year 2</div>
-          </div>
-        </div>
-      </div>
-      <div class="tcard">
-        <div class="tcard-stars">★★★★★</div>
-        <div class="tcard-quote">My DISC assessment placed me in purchase loans — exactly where my personality thrives. I'm now team lead at 26. The career path CMG lays out is real and they actually hold up their end.</div>
-        <div class="tcard-author">
-          <div class="tcard-avatar" style="background: var(--cmg-red);">AL</div>
-          <div>
-            <div class="tcard-name">Ashley L.</div>
-            <div class="tcard-detail">Team Lead, Charleston branch</div>
-          </div>
-        </div>
-      </div>
-      <div class="tcard">
-        <div class="tcard-stars">★★★★★</div>
-        <div class="tcard-quote">I came from retail banking and thought I knew mortgages. CMG's training showed me how much I didn't know — and how to close at twice the rate. Best career move I've made.</div>
-        <div class="tcard-author">
-          <div class="tcard-avatar" style="background: var(--green);">RC</div>
-          <div>
-            <div class="tcard-name">Rafael C.</div>
-            <div class="tcard-detail">Former bank teller → $145K Year 3</div>
-          </div>
-        </div>
-      </div>
+    <div class="testimonials-row" data-field="testimonials_html" data-tab="content">
+      {{TESTIMONIALS_HTML}}
     </div>
   </div>
 
@@ -2364,12 +2332,11 @@
     <div class="video-block">
       <div class="video-thumb">
         <div class="play-circle">▶</div>
-        <div class="video-thumb-label">3-minute message from our Regional Director</div>
+        <div class="video-thumb-label" data-field="video_label" data-tab="manager">{{VIDEO_LABEL}}</div>
       </div>
       <div class="video-body">
-        <h3>"We built this team to create careers, not fill seats."</h3>
-        <p>When we opened the South Carolina call center, the goal wasn't volume — it was building a team of mortgage professionals who'd still be here, and thriving, five years from now.</p>
-        <p>Watch this short message to hear what our top performers have in common and what your first 90 days will actually look like.</p>
+        <h3 data-field="video_headline" data-tab="manager">{{VIDEO_HEADLINE}}</h3>
+        <div data-field="video_body" data-tab="manager">{{VIDEO_BODY}}</div>
         <div class="leader-row">
           <div class="leader-ava">{{MANAGER_INITIALS}}</div>
           <div>
@@ -2382,10 +2349,10 @@
   </div>
 
   <!-- CTA -->
-  <div class="full-cta">
-    <h2>Your application takes under 3 minutes.</h2>
-    <p>No cover letter. No lengthy questionnaire. Just your name, phone, and a bit about yourself. A recruiter will be in touch within one business day.</p>
-    <button class="btn-red" style="font-size: 15px; padding: 16px 36px;" onclick="showPage('p4')">Apply Now — It's Free →</button>
+  <div class="full-cta" data-field="cta_headline" data-tab="cta">
+    <h2>{{CTA_HEADLINE}}</h2>
+    <p>{{CTA_BODY}}</p>
+    <button class="btn-red" style="font-size: 15px; padding: 16px 36px;" onclick="showPage('p4')">{{CTA_BTN}}</button>
   </div>
 
 </div>
@@ -2397,8 +2364,8 @@
 
   <div class="why-hero">
     <div class="section-eyebrow" style="justify-content: center; margin-bottom: 16px;">Why {{COMPANY_NAME}}</div>
-    <h1>The platform that lets<br>great producers <span>win.</span></h1>
-    <p>Tools, leads, coaching, and culture. Here's why CMG loan officers outperform the market — and why they stay.</p>
+    <h1 data-field="why_hero_headline" data-tab="pages">{{WHY_HERO_HEADLINE}}</h1>
+    <p data-field="why_hero_body" data-tab="pages">{{WHY_HERO_BODY}}</p>
   </div>
 
   <div class="awards-strip">
@@ -2771,8 +2738,8 @@
   <div class="apply-wrap">
     <div class="apply-sidebar">
       <div class="section-eyebrow" style="margin-bottom: 20px;">Apply Now</div>
-      <h2>Tell us about <span>yourself.</span></h2>
-      <p>Your application takes under 3 minutes. No resume required to start. A recruiter will contact you within one business day — and you'll schedule your intro call right here.</p>
+      <h2 data-field="apply_sidebar_headline" data-tab="pages">{{APPLY_SIDEBAR_HEADLINE}}</h2>
+      <p data-field="apply_sidebar_body" data-tab="pages">{{APPLY_SIDEBAR_BODY}}</p>
 
       <div class="apply-points">
         <div class="apply-point">
@@ -3284,9 +3251,9 @@
         <a href="https://www.cmghomeloans.com/corporate/web-accessibility" target="_blank">Web Accessibility</a>
       </div>
     </div>
-    <div class="footer-legal">
+    <div class="footer-legal" data-field="footer_legal" data-tab="footer">
       {{BRANCH_NAME}} &nbsp;&middot;&nbsp; {{BRANCH_ADDRESS}} &nbsp;&middot;&nbsp; Branch NMLS# {{BRANCH_NMLS}} &nbsp;&middot;&nbsp; {{MANAGER_NAME}} NMLS# {{MANAGER_NMLS}}<br><br>
-      {{COMPANY_NAME}}, NMLS ID# {{COMPANY_NMLS_ID}} (For licensing information, go to <a href="https://www.nmlsconsumeraccess.org" target="_blank" style="color:rgba(255,255,255,0.45);text-decoration:underline;">www.nmlsconsumeraccess.org</a>). Equal Housing Opportunity. Licensed by the Department of Financial Protection and Innovation (DFPI) under the California Residential Mortgage Lending Act No. 4150025.; AZ #0903132; Colorado regulated by the Division of Real Estate; Georgia Residential Mortgage Licensee #15438; Mortgage Servicer License No. MS068. Hawaii Mortgage Loan Originator Company License No. HI-1820. Massachusetts Mortgage Lender License #MC1820 and Mortgage Broker License #MC1820; Mississippi Licensed Mortgage Company Licensed by the Mississippi Department of Banking and Consumer Finance; Licensed by the New Hampshire Banking Department; Licensed by the NJ Department of Banking and Insurance; Licensed Mortgage Banker &ndash; NYS Department of Financial Services; Ohio Mortgage Broker Act Mortgage Banker Exemption #MBMB.850204.000; Rhode Island Licensed Lender #20142986LL; Registered Mortgage Banker with the Texas Department of Savings and Mortgage Lending, and Licensed by the Virginia State Corporation Commission #MC-5521. CMG Mortgage, Inc. is licensed in all 50 states, the District of Columbia, Guam, Puerto Rico, and the Virgin Islands (<a href="https://www.cmgfi.com/corporate/licensing" target="_blank" style="color:rgba(255,255,255,0.45);text-decoration:underline;">https://www.cmgfi.com/corporate/licensing</a>).
+      {{FOOTER_LEGAL}}
     </div>
   </div>
 </footer>

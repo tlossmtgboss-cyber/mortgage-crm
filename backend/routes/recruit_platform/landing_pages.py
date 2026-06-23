@@ -172,6 +172,54 @@ def _render(config: dict, org_slug: str, page_slug: str) -> str:
         "{{API_BASE_URL}}": API_BASE_URL,
         "{{ORG_SLUG}}": org_slug,
         "{{PAGE_SLUG}}": page_slug,
+        # Hero checks
+        "{{HERO_CHECK_1}}": config.get("hero_check_1", ""),
+        "{{HERO_CHECK_2}}": config.get("hero_check_2", ""),
+        "{{HERO_CHECK_3}}": config.get("hero_check_3", ""),
+        "{{HERO_CHECK_4}}": config.get("hero_check_4", ""),
+        # Earnings card
+        "{{EARNINGS_LABEL}}": config.get("earnings_label", "Year 1 On-Target Earnings"),
+        "{{EARNINGS_NOTE}}": config.get("earnings_note", "base salary + commission"),
+        # Career path section
+        "{{CAREER_TITLE}}": config.get("career_title", ""),
+        "{{CAREER_SUB}}": config.get("career_sub", ""),
+        "{{CAREER_1_TIMELINE}}": config.get("career_1_timeline", ""),
+        "{{CAREER_1_TITLE}}": config.get("career_1_title", ""),
+        "{{CAREER_1_DESC}}": config.get("career_1_desc", ""),
+        "{{CAREER_1_SALARY}}": config.get("career_1_salary", ""),
+        "{{CAREER_2_TIMELINE}}": config.get("career_2_timeline", ""),
+        "{{CAREER_2_TITLE}}": config.get("career_2_title", ""),
+        "{{CAREER_2_DESC}}": config.get("career_2_desc", ""),
+        "{{CAREER_2_SALARY}}": config.get("career_2_salary", ""),
+        "{{CAREER_3_TIMELINE}}": config.get("career_3_timeline", ""),
+        "{{CAREER_3_TITLE}}": config.get("career_3_title", ""),
+        "{{CAREER_3_DESC}}": config.get("career_3_desc", ""),
+        "{{CAREER_3_SALARY}}": config.get("career_3_salary", ""),
+        "{{CAREER_4_TIMELINE}}": config.get("career_4_timeline", ""),
+        "{{CAREER_4_TITLE}}": config.get("career_4_title", ""),
+        "{{CAREER_4_DESC}}": config.get("career_4_desc", ""),
+        "{{CAREER_4_SALARY}}": config.get("career_4_salary", ""),
+        # Training section headers
+        "{{TRAINING_SECTION_TITLE}}": config.get("training_section_title", ""),
+        "{{TRAINING_SECTION_SUB}}": config.get("training_section_sub", ""),
+        # Testimonials
+        "{{TESTIMONIALS_HTML}}": config.get("testimonials_html", ""),
+        # Video section
+        "{{VIDEO_LABEL}}": config.get("video_label", ""),
+        "{{VIDEO_HEADLINE}}": config.get("video_headline", ""),
+        "{{VIDEO_BODY}}": config.get("video_body", ""),
+        # CTA section
+        "{{CTA_HEADLINE}}": config.get("cta_headline", ""),
+        "{{CTA_BODY}}": config.get("cta_body", ""),
+        "{{CTA_BTN}}": config.get("cta_btn", "Apply Now →"),
+        # Page 2 — Why hero
+        "{{WHY_HERO_HEADLINE}}": config.get("why_hero_headline", ""),
+        "{{WHY_HERO_BODY}}": config.get("why_hero_body", ""),
+        # Page 4 — Apply sidebar
+        "{{APPLY_SIDEBAR_HEADLINE}}": config.get("apply_sidebar_headline", ""),
+        "{{APPLY_SIDEBAR_BODY}}": config.get("apply_sidebar_body", ""),
+        # Footer
+        "{{FOOTER_LEGAL}}": config.get("footer_legal", ""),
     }
 
     # Training cards — items are newline-delimited, render as list-item divs
