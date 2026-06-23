@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRecruitPlatform } from '../../../contexts/RecruitPlatformContext';
+import RecruitSmartCalendar from '../components/RecruitSmartCalendar';
 import './Dashboard.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://api.perenniaai.com';
@@ -20,12 +21,13 @@ function formatDate(iso) {
 }
 
 // ─── Applicant Detail Drawer ───────────────────────────────────────────────────
-function ApplicantDetail({ applicant, recruitToken, onClose, onStatusChange }) {
+function ApplicantDetail({ applicant, recruitToken, recruitUser, onClose, onStatusChange }) {
   const [status, setStatus] = useState(applicant.status);
   const [notes, setNotes] = useState(applicant.notes || []);
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   const handleStatusChange = async (e) => {
     const newStatus = e.target.value;
@@ -132,16 +134,28 @@ function ApplicantDetail({ applicant, recruitToken, onClose, onStatusChange }) {
           <div className="rd-detail-section">
             <div className="rd-detail-label">Actions</div>
             <div className="rd-actions">
-              <a href={`/recruiting/interviews?candidate_id=${applicant.id}`}
-                className="rd-btn rd-btn-secondary" style={{ textDecoration: 'none' }}>
-                Schedule Interview
-              </a>
-              <a href={`/recruiting/offers?candidate_id=${applicant.id}`}
-                className="rd-btn rd-btn-secondary" style={{ textDecoration: 'none' }}>
-                Create Offer
-              </a>
+              <button
+                className="rd-btn rd-btn-secondary"
+                onClick={() => setShowCalendar(true)}
+              >
+                Schedule Call
+              </button>
             </div>
           </div>
+
+          {showCalendar && (
+            <RecruitSmartCalendar
+              candidateName={`${applicant.first_name} ${applicant.last_name}`}
+              candidateEmail={applicant.email}
+              candidatePhone={applicant.phone}
+              candidateId={applicant.id}
+              orgId={recruitUser?.organization_id}
+              recruiterId={recruitUser?.id || recruitUser?.user_id}
+              recruiterName={recruitUser ? `${recruitUser.first_name || ''} ${recruitUser.last_name || ''}`.trim() || recruitUser.email : ''}
+              onClose={() => setShowCalendar(false)}
+              onSuccess={() => setShowCalendar(false)}
+            />
+          )}
 
           {/* Notes */}
           <div className="rd-detail-section">
@@ -292,7 +306,7 @@ function AddCandidateModal({ onClose, onAdded }) {
 
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function RecruitDashboard() {
-  const { recruitToken } = useRecruitPlatform();
+  const { recruitToken, recruitUser } = useRecruitPlatform();
   const [applicants, setApplicants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -410,6 +424,7 @@ export default function RecruitDashboard() {
         <ApplicantDetail
           applicant={selected}
           recruitToken={recruitToken}
+          recruitUser={recruitUser}
           onClose={() => setSelected(null)}
           onStatusChange={handleStatusChange}
         />
