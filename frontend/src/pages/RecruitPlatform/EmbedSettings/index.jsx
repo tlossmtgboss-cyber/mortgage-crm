@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useRecruitPlatform } from '../../../contexts/RecruitPlatformContext';
 import './EmbedSettings.css';
 
-const APP_BASE = 'https://app.perenniaai.com';
+const APP_BASE = 'https://recruit.perenniaai.com';
 const API_BASE_PUB = 'https://api.perenniaai.com';
 
 function CopyButton({ text }) {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://api.perenniaai.com';
-const APP_BASE = 'https://app.perenniaai.com';
+const APP_BASE = 'https://recruit.perenniaai.com';
 
 const styles = {
   root: {

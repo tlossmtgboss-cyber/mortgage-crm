@@ -301,7 +301,7 @@ async def widget_js(tenant_slug: str):
     js = f"""
 (function() {{
   var TENANT_SLUG = {repr(tenant_slug)};
-  var WIDGET_URL = 'https://app.perenniaai.com/recruit/chat-widget/' + TENANT_SLUG;
+  var WIDGET_URL = 'https://recruit.perenniaai.com/recruit/chat-widget/' + TENANT_SLUG;
 
   // Create bubble container
   var container = document.createElement('div');
