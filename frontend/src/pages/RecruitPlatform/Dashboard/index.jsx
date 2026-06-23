@@ -306,7 +306,7 @@ function AddCandidateModal({ onClose, onAdded }) {
 
 // ─── Main Dashboard ────────────────────────────────────────────────────────────
 export default function RecruitDashboard() {
-  const { recruitToken, recruitUser } = useRecruitPlatform();
+  const { recruitToken, recruitUser, fetchWithAuth } = useRecruitPlatform();
   const [applicants, setApplicants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -316,15 +316,14 @@ export default function RecruitDashboard() {
   const [showAddModal, setShowAddModal] = useState(false);
 
   const fetchApplicants = useCallback(() => {
+    if (!recruitToken) return;
     setLoading(true);
-    fetch(`${API_BASE}/api/v1/recruit-platform/applicants`, {
-      headers: { Authorization: `Bearer ${recruitToken}` },
-    })
+    fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/applicants`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setApplicants(Array.isArray(data) ? data : (data.items || [])))
       .catch(() => setApplicants([]))
       .finally(() => setLoading(false));
-  }, [recruitToken]);
+  }, [recruitToken, fetchWithAuth]);
 
   useEffect(() => { fetchApplicants(); }, [fetchApplicants]);
 
