@@ -19,6 +19,7 @@ Public endpoints (no auth, prefix /api/v1/recruit-platform):
 
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -145,7 +146,7 @@ def _render(config: dict, org_slug: str, page_slug: str) -> str:
         "{{LOCATION_DISPLAY}}": config.get("location_display", ""),
         "{{HERO_HEADLINE}}": config.get("hero_headline", ""),
         "{{HERO_SUBHEADLINE}}": config.get("hero_subheadline", ""),
-        "{{HERO_HEADLINE_PLAIN}}": config.get("hero_headline_plain", config.get("hero_headline", "")),
+        "{{HERO_HEADLINE_PLAIN}}": config.get("hero_headline_plain") or re.sub(r'<[^>]+>', '', config.get("hero_headline", "")),
         "{{SIGNING_BONUS}}": config.get("signing_bonus", ""),
         "{{SIGNING_BONUS_AMOUNT}}": config.get("signing_bonus_amount", ""),
         "{{YEAR1_RANGE}}": config.get("year1_range", ""),

@@ -318,7 +318,7 @@ export default function RecruitDashboard() {
   const fetchApplicants = useCallback(() => {
     if (!recruitToken) return;
     setLoading(true);
-    fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/applicants`)
+    fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/applicants/`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setApplicants(Array.isArray(data) ? data : (data.items || [])))
       .catch(() => setApplicants([]))
