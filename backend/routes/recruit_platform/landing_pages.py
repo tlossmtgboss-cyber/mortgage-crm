@@ -347,7 +347,7 @@ def create_landing_page(
             text("""
                 INSERT INTO recruit_landing_pages
                     (organization_id, title, slug, status, config, created_by)
-                VALUES (:oid, :title, :slug, 'draft', :config::jsonb, :uid)
+                VALUES (:oid, :title, :slug, 'draft', CAST(:config AS JSONB), :uid)
                 RETURNING id, organization_id, title, slug, status, config,
                           view_count, submission_count, created_by, created_at, updated_at
             """),

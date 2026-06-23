@@ -140,19 +140,18 @@ export default function WebsiteBuilder() {
   const [previewMobile, setPreviewMobile] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const iframeRef = useRef(null);
+  const autoSelectedRef = useRef(false);
 
+  // Only refreshes the page list — never touches selectedId or config,
+  // so unsaved edits are never clobbered by token refreshes or post-save reloads.
   const loadPages = useCallback(async () => {
-    if (!recruitToken) return;
+    if (!localStorage.getItem('recruit_auth_token')) return;
     setListError('');
     try {
       const res = await fetchWithAuth(`${API_BASE}/api/v1/recruit-platform/landing-pages`);
       if (res.ok) {
         const data = await res.json();
         setPages(data);
-        if (data.length > 0 && !selectedId) {
-          setSelectedId(data[0].id);
-          setConfig({ ...DEFAULT_CONFIG, ...(data[0].config || {}) });
-        }
       } else {
         const body = await res.json().catch(() => ({}));
         setListError(body.detail || `API error ${res.status}`);
@@ -160,9 +159,18 @@ export default function WebsiteBuilder() {
     } catch (e) {
       setListError('Failed to connect to API');
     }
-  }, [recruitToken, fetchWithAuth]);
+  }, [fetchWithAuth]);
 
   useEffect(() => { loadPages(); }, [loadPages]);
+
+  // Auto-select the first page exactly once, after the initial page list loads.
+  useEffect(() => {
+    if (pages.length > 0 && !autoSelectedRef.current) {
+      autoSelectedRef.current = true;
+      setSelectedId(pages[0].id);
+      setConfig({ ...DEFAULT_CONFIG, ...(pages[0].config || {}) });
+    }
+  }, [pages]);
 
   const loadPreview = useCallback(async (pageId) => {
     if (!pageId || !recruitToken) return;
