@@ -573,7 +573,7 @@ async def get_lead_mappings(
     ).count()
 
     # Get paginated mappings with lead info
-    from models.lead import Lead
+    from database.models import Lead
 
     mappings = db.query(FUBLeadMapping, Lead).join(
         Lead, FUBLeadMapping.lead_id == Lead.id
