@@ -1871,7 +1871,7 @@ async def get_referral_partners(
             result.append({
                 "id": partner.id,
                 "name": partner.name,
-                "company": partner.company,
+                "company": partner.company or partner.business_name,
                 "type": partner.type,
                 "phone": partner.phone,
                 "email": partner.email,
@@ -1881,7 +1881,9 @@ async def get_referral_partners(
                 "loyalty_tier": partner.loyalty_tier,
                 "partner_category": partner.partner_category or "individual",
                 "status": partner.status,
-                "created_at": partner.created_at
+                "created_at": partner.created_at,
+                "last_contact": partner.last_interaction.isoformat() if partner.last_interaction else None,
+                "last_referral": partner.last_interaction.isoformat() if partner.last_interaction else None,
             })
 
         return result

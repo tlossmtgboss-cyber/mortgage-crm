@@ -245,6 +245,7 @@ async def register_builder(body: RegisterRequest, request: Request, db: Session 
         partner = ReferralPartner(
             organization_id=lo.organization_id,
             name=f"{body.first_name} {body.last_name}",
+            company=body.company_name,
             business_name=body.company_name,
             contact_name=f"{body.first_name} {body.last_name}",
             category="Builder",
