@@ -241,9 +241,26 @@ class FollowUpBossSyncService:
                     is_new = True
                     mapping = None
 
+            # Extract basic fields first (needed before flush — name is NOT NULL)
+            _first = fub_person.get("firstName", "") or ""
+            _last = fub_person.get("lastName", "") or ""
+            _name = f"{_first} {_last}".strip() or "Unknown"
+            _email = extract_email(fub_person)
+            _phone = extract_phone(fub_person)
+            _source = fub_person.get("source", "Follow Up Boss")
+
             if is_new:
-                # Create new lead — organization_id is required (NOT NULL)
-                lead = Lead(owner_id=connection.user_id, organization_id=organization_id)
+                # Create new lead with required NOT NULL fields set before flush
+                lead = Lead(
+                    owner_id=connection.user_id,
+                    organization_id=organization_id,
+                    first_name=_first,
+                    last_name=_last,
+                    name=_name,
+                    email=_email,
+                    phone=_phone,
+                    source=_source,
+                )
                 self.db.add(lead)
                 self.db.flush()
 
@@ -253,13 +270,13 @@ class FollowUpBossSyncService:
             # Transform and apply fields
             stage_mappings = self.get_stage_mappings(connection.id)
 
-            # Basic fields
-            lead.first_name = fub_person.get("firstName", "")
-            lead.last_name = fub_person.get("lastName", "")
-            lead.name = f"{lead.first_name} {lead.last_name}".strip()
-            lead.email = extract_email(fub_person)
-            lead.phone = extract_phone(fub_person)
-            lead.source = fub_person.get("source", "Follow Up Boss")
+            # Basic fields (update on existing lead too)
+            lead.first_name = _first
+            lead.last_name = _last
+            lead.name = _name
+            lead.email = _email
+            lead.phone = _phone
+            lead.source = _source
 
             # Property fields
             lead.address = fub_person.get("propertyStreet", "")
