@@ -525,26 +525,38 @@ function FollowUpBossIntegrationPage() {
             </div>
             <div className="fub-card-body">
               <p style={{ color: '#64748b', marginBottom: '16px' }}>
-                Configure this webhook URL in Follow Up Boss to receive real-time updates when leads are created, updated, or change stages.
+                Real-time sync: when a lead is added or updated in Follow Up Boss, it instantly appears in your CRM.
               </p>
               {webhookUrl && (
-                <div className="fub-webhook-url-box">
+                <div className="fub-webhook-url-box" style={{ marginBottom: '16px' }}>
                   <code className="fub-webhook-url">{webhookUrl}</code>
                   <button className="fub-btn fub-btn-sm fub-btn-outline" onClick={() => copyToClipboard(webhookUrl)}>
                     Copy
                   </button>
                 </div>
               )}
-              <div className="fub-help-steps">
-                <h4>Setup Steps:</h4>
-                <ol>
-                  <li>Go to Follow Up Boss &rarr; Admin &rarr; API</li>
-                  <li>Under Webhooks, click "Add Webhook"</li>
-                  <li>Paste the URL above</li>
-                  <li>Select events: People Created, People Updated, People Stage Updated</li>
-                  <li>Save the webhook</li>
-                </ol>
-              </div>
+              <button
+                className="fub-btn fub-btn-primary"
+                onClick={async () => {
+                  try {
+                    const activeConn = connections[0];
+                    const result = await connectionApi.registerWebhooks(activeConn?.id || null);
+                    const total = (result.registered || []).length + (result.skipped_already_exists || []).length;
+                    if ((result.failed || []).length > 0) {
+                      toast.error(`Webhook registration partially failed: ${result.failed.join(', ')}`);
+                    } else {
+                      toast.success(`Webhooks active — ${total} event${total !== 1 ? 's' : ''} configured. New leads added in FUB will sync automatically.`);
+                    }
+                  } catch (err) {
+                    toast.error(`Failed to register webhooks: ${err.message}`);
+                  }
+                }}
+              >
+                Register Webhooks in FUB
+              </button>
+              <p style={{ color: '#94a3b8', fontSize: '12px', marginTop: '8px' }}>
+                Registers people.created, people.updated, people.stage_changed, and notes.created events automatically.
+              </p>
             </div>
           </div>
 

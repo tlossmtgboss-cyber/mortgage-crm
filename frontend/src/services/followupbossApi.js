@@ -91,6 +91,16 @@ export const connectionApi = {
       : '/api/v1/integrations/followupboss/webhook-url';
     return apiRequest(url);
   },
+
+  /**
+   * Register (or re-register) FUB webhooks for a connection
+   */
+  registerWebhooks: (connectionId = null) => {
+    const url = connectionId
+      ? `/api/v1/integrations/followupboss/register-webhooks?connection_id=${connectionId}`
+      : '/api/v1/integrations/followupboss/register-webhooks';
+    return apiRequest(url, { method: 'POST' });
+  },
 };
 
 // =============================================================================

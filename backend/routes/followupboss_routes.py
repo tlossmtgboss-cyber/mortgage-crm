@@ -189,6 +189,29 @@ async def connect_fub_account(
     connection.webhook_url = webhook_url
     db.commit()
 
+    # Auto-register webhooks in FUB for all relevant event types
+    FUB_WEBHOOK_EVENTS = [
+        "people.created",
+        "people.updated",
+        "people.stage_changed",
+        "notes.created",
+    ]
+    registered_webhooks = []
+    try:
+        for event in FUB_WEBHOOK_EVENTS:
+            try:
+                wh = client.create_webhook(
+                    url=webhook_url,
+                    event=event,
+                    secret=webhook_secret,
+                )
+                registered_webhooks.append(event)
+                logger.info(f"Registered FUB webhook for {event}: {wh.get('id')}")
+            except Exception as wh_err:
+                logger.warning(f"Failed to register FUB webhook for {event}: {wh_err}")
+    except Exception as e:
+        logger.warning(f"Webhook auto-registration failed: {e}")
+
     # Fetch and auto-map stages
     try:
         fub_stages = client.get_stages()
@@ -206,7 +229,63 @@ async def connect_fub_account(
         "fub_user_name": connection.fub_user_name,
         "account_label": connection.account_label,
         "webhook_url": webhook_url,
-        "message": "Follow Up Boss account connected successfully. Configure the webhook URL in FUB settings.",
+        "webhooks_registered": registered_webhooks,
+        "message": "Follow Up Boss account connected successfully. Webhooks auto-registered.",
+    }
+
+
+FUB_WEBHOOK_EVENTS = [
+    "people.created",
+    "people.updated",
+    "people.stage_changed",
+    "notes.created",
+]
+
+
+@router.post("/register-webhooks")
+async def register_fub_webhooks(
+    connection_id: Optional[int] = None,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Register (or re-register) FUB webhooks for a connection.
+
+    Safe to call multiple times — checks for existing webhooks and only
+    creates ones that are missing. Useful after the connect flow if
+    auto-registration failed, or when updating the webhook URL.
+    """
+    connection = _get_connection(db, get_user_id(current_user), connection_id)
+    client = FollowUpBossClient(decrypt_api_key(connection.api_key_encrypted))
+
+    # Fetch existing webhooks to avoid duplicates
+    try:
+        existing = client.get_webhooks()
+        existing_urls = {(w.get("url", ""), w.get("event", "")) for w in existing}
+    except Exception:
+        existing_urls = set()
+
+    registered, skipped, failed = [], [], []
+    for event in FUB_WEBHOOK_EVENTS:
+        if (connection.webhook_url, event) in existing_urls:
+            skipped.append(event)
+            continue
+        try:
+            client.create_webhook(
+                url=connection.webhook_url,
+                event=event,
+                secret=connection.webhook_secret,
+            )
+            registered.append(event)
+        except Exception as e:
+            logger.warning(f"Failed to register FUB webhook {event}: {e}")
+            failed.append(event)
+
+    return {
+        "registered": registered,
+        "skipped_already_exists": skipped,
+        "failed": failed,
+        "webhook_url": connection.webhook_url,
     }
 
 

@@ -70,14 +70,14 @@ async def handle_fub_webhook(
     # Get raw body for signature validation
     body = await request.body()
 
-    # Validate webhook signature — secret is required
+    # Validate webhook signature if FUB sends one (only present when secret was configured in FUB)
     signature = request.headers.get("X-FUB-Signature", "")
-    if not connection.webhook_secret:
-        logger.error(f"FUB webhook secret not configured for connection_id={connection_id}")
-        raise HTTPException(status_code=503, detail="Webhook secret not configured")
-    if not validate_webhook_signature(body, signature, connection.webhook_secret):
-        logger.warning(f"FUB webhook signature validation failed for connection_id={connection_id}")
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    if signature and connection.webhook_secret:
+        if not validate_webhook_signature(body, signature, connection.webhook_secret):
+            logger.warning(f"FUB webhook signature validation failed for connection_id={connection_id}")
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    elif signature and not connection.webhook_secret:
+        logger.warning(f"FUB webhook sent signature but no secret stored for connection {connection_id} — accepting anyway")
 
     # Parse payload
     try:
@@ -290,20 +290,11 @@ def handle_person_created(
         logger.warning("people.created event missing person ID")
         return None
 
-    # Check if assigned to this user
-    assigned_to = event_data.get("assignedTo")
-    if assigned_to and connection.fub_user_id:
-        # Check if it's a dict with id or just an id
-        assigned_id = assigned_to.get("id") if isinstance(assigned_to, dict) else assigned_to
-        if assigned_id != connection.fub_user_id:
-            logger.info(f"Person {person_id} not assigned to user {connection.fub_user_id}, skipping")
-            return {"skipped": True, "reason": "not_assigned_to_user"}
-
-    # Sync person to lead
+    # Sync ALL new people — no assignment filter (admin accounts own all contacts)
     lead_id, created = sync_service.sync_person_to_lead(
         connection=connection,
         fub_person=event_data,
-        event_type=FUBEventType.PEOPLE_CREATED,
+        event_type=FUBEventType.PEOPLE_CREATED.value,
     )
 
     if lead_id:
@@ -338,37 +329,19 @@ def handle_person_updated(
         FUBLeadMapping.fub_person_id == person_id,
     ).first()
 
-    if mapping:
-        # Update existing lead
-        lead_id, _ = sync_service.sync_person_to_lead(
-            connection=connection,
-            fub_person=event_data,
-            event_type=FUBEventType.PEOPLE_UPDATED,
-        )
+    lead_id, created = sync_service.sync_person_to_lead(
+        connection=connection,
+        fub_person=event_data,
+        event_type=FUBEventType.PEOPLE_UPDATED.value,
+    )
+    if lead_id:
         return {
             "entity_type": "lead",
             "entity_id": lead_id,
-            "updated": True,
+            "created": created,
+            "updated": not created,
         }
-    else:
-        # Check if now assigned to this user
-        assigned_to = event_data.get("assignedTo")
-        if assigned_to and connection.fub_user_id:
-            assigned_id = assigned_to.get("id") if isinstance(assigned_to, dict) else assigned_to
-            if assigned_id == connection.fub_user_id:
-                # Create new lead
-                lead_id, created = sync_service.sync_person_to_lead(
-                    connection=connection,
-                    fub_person=event_data,
-                    event_type=FUBEventType.PEOPLE_UPDATED,
-                )
-                return {
-                    "entity_type": "lead",
-                    "entity_id": lead_id,
-                    "created": created,
-                }
-
-    return {"skipped": True, "reason": "no_mapping_and_not_assigned"}
+    return {"skipped": True, "reason": "sync_failed"}
 
 
 def handle_stage_changed(
@@ -389,7 +362,7 @@ def handle_stage_changed(
 
     # Find mapping
     from models.followupboss_models import FUBLeadMapping, FUBStageMapping
-    from models.lead import Lead
+    from database.models import Lead
 
     mapping = sync_service.db.query(FUBLeadMapping).filter(
         FUBLeadMapping.connection_id == connection.id,
@@ -516,7 +489,7 @@ def handle_person_assigned(
                     lead_id, created = sync_service.sync_person_to_lead(
                         connection=connection,
                         fub_person=person_data,
-                        event_type=FUBEventType.PEOPLE_ASSIGNED,
+                        event_type=FUBEventType.PEOPLE_ASSIGNED.value,
                     )
                     return {
                         "entity_type": "lead",
