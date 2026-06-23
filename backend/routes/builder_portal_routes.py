@@ -86,6 +86,23 @@ def _get_s3():
 # Auth helpers
 # ---------------------------------------------------------------------------
 
+def _set_rls_for_org(db: Session, organization_id: int) -> None:
+    """Set PostgreSQL RLS tenant context on an existing session.
+
+    Public builder endpoints authenticate via submission token (not JWT), so
+    TenantContextMiddleware never sets request.state.organization_id and
+    get_db() skips set_tenant_context(). Call this after resolving the org_id
+    from the LO or app record so RLS policies on builder_* tables are enforced.
+    """
+    if not organization_id:
+        return
+    try:
+        from database.tenant_mixin import set_tenant_context
+        set_tenant_context(db, organization_id)
+    except Exception as e:
+        logger.warning(f"builder portal: could not set RLS tenant context for org {organization_id}: {e}")
+
+
 def _require_builder_token(request: Request, db: Session) -> "BuilderApplication":
     """Validate builder submission token from Authorization header."""
     auth = request.headers.get("Authorization", "")
@@ -93,6 +110,9 @@ def _require_builder_token(request: Request, db: Session) -> "BuilderApplication
         raise HTTPException(status_code=401, detail="Missing submission token")
     token = auth[7:]
 
+    # Query without RLS so we can resolve the org_id from the token itself.
+    # The token is 288 bits of entropy — unguessable — and we set RLS immediately
+    # after so all subsequent queries in the handler are tenant-scoped.
     from database.models.builder_application import BuilderApplication
     app = db.query(BuilderApplication).filter(
         BuilderApplication.submission_token == token
@@ -102,6 +122,10 @@ def _require_builder_token(request: Request, db: Session) -> "BuilderApplication
 
     if app.created_at and (datetime.now(timezone.utc) - app.created_at) > timedelta(days=30):
         raise HTTPException(status_code=401, detail="Submission token expired")
+
+    # Set RLS tenant context so all subsequent DB operations in this request
+    # are scoped to the builder's organization (defense-in-depth).
+    _set_rls_for_org(db, app.organization_id)
 
     return app
 
@@ -231,6 +255,9 @@ async def register_builder(body: RegisterRequest, request: Request, db: Session 
     if not lo:
         raise HTTPException(status_code=404, detail="Loan officer not found")
 
+    # Scope this session to the LO's org so RLS policies are enforced.
+    _set_rls_for_org(db, lo.organization_id)
+
     # Generate submission token
     token = f"bld_{secrets.token_urlsafe(48)}"
 
@@ -333,6 +360,8 @@ async def resume_builder(body: ResumeRequest, request: Request, db: Session = De
     ).first()
     if not lo:
         raise HTTPException(status_code=404, detail="No resumable application found")
+
+    _set_rls_for_org(db, lo.organization_id)
 
     email_lower = body.email.strip().lower()
     existing = db.query(BuilderApplication).filter(

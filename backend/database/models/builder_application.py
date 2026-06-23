@@ -72,7 +72,7 @@ class BuilderDocument(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     application_id = Column(Integer, ForeignKey("builder_applications.id", ondelete="CASCADE"), nullable=False, index=True)
-    organization_id = Column(Integer, nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     doc_type = Column(String(100), nullable=False)
     file_name = Column(String(512), nullable=False)
