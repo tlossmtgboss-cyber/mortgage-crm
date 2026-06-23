@@ -380,6 +380,20 @@ class FollowUpBossSyncService:
             logger.warning(f"No lead mapping for FUB person {fub_person_id}")
             return None
 
+        # Deduplicate: skip if this note was already imported
+        if fub_note_id:
+            existing = self.db.query(Activity).filter(
+                Activity.lead_id == mapping.lead_id,
+                Activity.user_metadata["fub_note_id"].as_string() == str(fub_note_id)
+            ).first()
+            if existing:
+                return existing.id
+
+        # Resolve organization_id (required NOT NULL on activities)
+        from database.models import Lead as _Lead
+        _lead = self.db.query(_Lead).filter(_Lead.id == mapping.lead_id).first()
+        org_id = _lead.organization_id if _lead else None
+
         # Log sync event
         sync_event = FUBSyncEvent(
             connection_id=connection.id,
@@ -397,6 +411,7 @@ class FollowUpBossSyncService:
             # Create activity
             activity = Activity(
                 type=ActivityType.NOTE,
+                organization_id=org_id,
                 lead_id=mapping.lead_id,
                 user_id=connection.user_id,
                 content=fub_note.get("body", ""),
@@ -655,6 +670,7 @@ class FollowUpBossSyncService:
         connection: FUBUserConnection,
         fub_event: Dict,
         lead_id: int,
+        org_id: Optional[int] = None,
     ) -> None:
         """Sync a single FUB event (Email/SMS/Call) to a CRM Activity, deduplicating by fub_event_id."""
         from database.enums import ActivityType
@@ -669,10 +685,10 @@ class FollowUpBossSyncService:
             "Call": ActivityType.CALL,
         }
         activity_type = type_map.get(event_type_str)
-        if not activity_type:
+        if not activity_type or not fub_event_id:
             return
 
-        # Deduplicate: skip if already imported
+        # Deduplicate: skip if already imported (use JSON path operator ->>)
         existing = self.db.query(Activity).filter(
             Activity.lead_id == lead_id,
             Activity.user_metadata["fub_event_id"].as_string() == str(fub_event_id)
@@ -683,6 +699,7 @@ class FollowUpBossSyncService:
         try:
             activity = Activity(
                 type=activity_type,
+                organization_id=org_id,
                 lead_id=lead_id,
                 user_id=connection.user_id,
                 content=fub_event.get("description") or fub_event.get("body") or "",
@@ -782,7 +799,7 @@ class FollowUpBossSyncService:
                                         limit=20,
                                     )
                                     for event in events_result.get("events", []):
-                                        self._sync_fub_event_to_activity(connection, event, lead_id)
+                                        self._sync_fub_event_to_activity(connection, event, lead_id, org_id)
                                 except Exception as ev_err:
                                     logger.warning(f"Failed to sync {event_type_str} events for FUB person {fub_person_id}: {ev_err}")
                     else:
