@@ -237,9 +237,9 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
                 allowed = _LEAD_VALID_TRANSITIONS.get(old_lead_status, [])
                 if allowed and new_status not in allowed:
-                    rejected_ids.append(lead_id)
-                    errors.append(f"Lead {lead_id}: invalid transition '{old_lead_status}' -> '{new_status}'")
-                    continue
+                    logger.warning(
+                        f"Bulk manual stage override: lead {lead_id} '{old_lead_status}' -> '{new_status}'"
+                    )
 
                 lead.stage = new_status
                 now = datetime.now(timezone.utc)
@@ -594,14 +594,17 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         stage_changed = old_status != new_status and new_status
 
         if stage_changed:
-            # Validate transition against workflow engine's state machine
-            from workflows.lead_workflow_engine import VALID_TRANSITIONS as _LEAD_VALID_TRANSITIONS
-            allowed = _LEAD_VALID_TRANSITIONS.get(old_status, [])
-            if allowed and new_status not in allowed:
-                raise DomainValidationError(
-                    f"Invalid stage transition: '{old_status}' -> '{new_status}'. "
-                    f"Allowed transitions: {allowed}"
-                )
+            # Log unexpected automated transitions; manual overrides are always allowed.
+            try:
+                from workflows.lead_workflow_engine import VALID_TRANSITIONS as _LEAD_VALID_TRANSITIONS
+                allowed = _LEAD_VALID_TRANSITIONS.get(old_status, [])
+                if allowed and new_status not in allowed:
+                    logger.warning(
+                        f"Manual stage override: lead {lead_id} '{old_status}' -> '{new_status}' "
+                        f"(outside automated workflow transitions: {allowed})"
+                    )
+            except Exception:
+                pass
 
             now = datetime.now(timezone.utc)
 
