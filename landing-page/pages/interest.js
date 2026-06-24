@@ -440,7 +440,7 @@ table.amort tfoot td:first-child{text-align:left}
                         ['Interest saved', '—', fmtD(r.base.totInt-r.xtra.totInt), biCol?fmtD(r.base.totInt-r.biwk.totInt):null, biCol?fmtD(r.base.totInt-r.biwkXtra.totInt):null],
                         ['Equity after 5 years', fmtD(eq5b), fmtD(eq5), biCol?fmtD(r.curBal-balAt(r.biwk.sched,60)):null, biCol?fmtD(r.curBal-balAt(r.biwkXtra.sched,60)):null],
                         ['Equity after 10 years', fmtD(eq10b), fmtD(eq10), biCol?fmtD(r.curBal-balAt(r.biwk.sched,120)):null, biCol?fmtD(r.curBal-balAt(r.biwkXtra.sched,120)):null],
-                        ['Equivalent rate earned', '—', r.effRate!=null?fmtPct(r.effRate):'—', biCol?(r.effRateBi!=null?fmtPct(r.effRateBi):'—'):null, biCol?(r.effRateBiXtra!=null?fmtPct(r.effRateBiXtra):'—'):null],
+                        ['Effective rate of interest', fmtPct(r.rate), r.effRate!=null?fmtPct(r.effRate):'—', biCol?(r.effRateBi!=null?fmtPct(r.effRateBi):'—'):null, biCol?(r.effRateBiXtra!=null?fmtPct(r.effRateBiXtra):'—'):null],
                       ].map(([label, std, extra, bi, biX]) => (
                         <tr key={label}>
                           <td>{label}</td>
