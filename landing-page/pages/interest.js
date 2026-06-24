@@ -133,11 +133,13 @@ export default function InterestPage() {
     const base = amortize(curBal, rate, remMo, 0);
     const xtra = amortize(curBal, rate, remMo, extra);
     const biwk = doBi ? amortize(curBal, rate, remMo, base.pmt / 2) : null;
+    const biwkXtra = doBi ? amortize(curBal, rate, remMo, base.pmt / 2 + extra) : null;
 
     const effRate = effectiveRate(extra, base, xtra);
     const effRateBi = biwk ? effectiveRate(base.pmt / 2, base, biwk) : null;
+    const effRateBiXtra = biwkXtra ? effectiveRate(base.pmt / 2 + extra, base, biwkXtra) : null;
 
-    setResult({ loanAmt, rate, termYrs, paysMade, extra, escrow, doBi, curBal, remMo, base, xtra, biwk, effRate, effRateBi });
+    setResult({ loanAmt, rate, termYrs, paysMade, extra, escrow, doBi, curBal, remMo, base, xtra, biwk, biwkXtra, effRate, effRateBi, effRateBiXtra });
     setAmortOpen(false);
   }, [form]);
 
@@ -441,17 +443,17 @@ table.amort tfoot td:first-child{text-align:left}
                     </tr></thead>
                     <tbody>
                       {[
-                        ['Regular P&I payment', fmtD(r.base.pmt), fmtD(r.base.pmt+r.extra), biCol?fmtD(r.base.pmt/2)+' /2wk':null, null],
-                        ['Total with escrow', fmtD(r.base.pmt+r.escrow), fmtD(r.base.pmt+r.extra+r.escrow), null, null],
-                        ['Extra monthly amount', '—', fmtD(r.extra), biCol?fmtD(r.base.pmt/2)+' /2wk':null, null],
-                        ['Months to pay off', fmt(r.base.months), fmt(r.xtra.months), biCol?fmt(r.biwk.months):null, null],
-                        ['Years to pay off', (r.base.months/12).toFixed(1)+' yr', (r.xtra.months/12).toFixed(1)+' yr', biCol?(r.biwk.months/12).toFixed(1)+' yr':null, null],
-                        ['Months saved', '—', fmt(r.base.months-r.xtra.months), biCol?fmt(r.base.months-r.biwk.months):null, null],
-                        ['Total interest paid', fmtD(r.base.totInt), fmtD(r.xtra.totInt), biCol?fmtD(r.biwk.totInt):null, null],
-                        ['Interest saved', '—', fmtD(r.base.totInt-r.xtra.totInt), biCol?fmtD(r.base.totInt-r.biwk.totInt):null, null],
-                        ['Equity after 5 years', fmtD(eq5b), fmtD(eq5), biCol?fmtD(r.curBal-balAt(r.biwk.sched,60)):null, null],
-                        ['Equity after 10 years', fmtD(eq10b), fmtD(eq10), biCol?fmtD(r.curBal-balAt(r.biwk.sched,120)):null, null],
-                        ['Equivalent rate earned', '—', r.effRate!=null?fmtPct(r.effRate):'—', biCol?(r.effRateBi!=null?fmtPct(r.effRateBi):'—'):null, null],
+                        ['Regular P&I payment', fmtD(r.base.pmt), fmtD(r.base.pmt+r.extra), biCol?fmtD(r.base.pmt/2)+' /2wk':null, biCol?fmtD(r.base.pmt/2+r.extra):null],
+                        ['Total with escrow', fmtD(r.base.pmt+r.escrow), fmtD(r.base.pmt+r.extra+r.escrow), null, biCol?fmtD(r.base.pmt/2+r.extra+r.escrow)+' /2wk':null],
+                        ['Extra monthly amount', '—', fmtD(r.extra), fmtD(r.base.pmt/2)+' /2wk', biCol?fmtD(r.base.pmt/2+r.extra):null],
+                        ['Months to pay off', fmt(r.base.months), fmt(r.xtra.months), biCol?fmt(r.biwk.months):null, biCol?fmt(r.biwkXtra.months):null],
+                        ['Years to pay off', (r.base.months/12).toFixed(1)+' yr', (r.xtra.months/12).toFixed(1)+' yr', biCol?(r.biwk.months/12).toFixed(1)+' yr':null, biCol?(r.biwkXtra.months/12).toFixed(1)+' yr':null],
+                        ['Months saved', '—', fmt(r.base.months-r.xtra.months), biCol?fmt(r.base.months-r.biwk.months):null, biCol?fmt(r.base.months-r.biwkXtra.months):null],
+                        ['Total interest paid', fmtD(r.base.totInt), fmtD(r.xtra.totInt), biCol?fmtD(r.biwk.totInt):null, biCol?fmtD(r.biwkXtra.totInt):null],
+                        ['Interest saved', '—', fmtD(r.base.totInt-r.xtra.totInt), biCol?fmtD(r.base.totInt-r.biwk.totInt):null, biCol?fmtD(r.base.totInt-r.biwkXtra.totInt):null],
+                        ['Equity after 5 years', fmtD(eq5b), fmtD(eq5), biCol?fmtD(r.curBal-balAt(r.biwk.sched,60)):null, biCol?fmtD(r.curBal-balAt(r.biwkXtra.sched,60)):null],
+                        ['Equity after 10 years', fmtD(eq10b), fmtD(eq10), biCol?fmtD(r.curBal-balAt(r.biwk.sched,120)):null, biCol?fmtD(r.curBal-balAt(r.biwkXtra.sched,120)):null],
+                        ['Equivalent rate earned', '—', r.effRate!=null?fmtPct(r.effRate):'—', biCol?(r.effRateBi!=null?fmtPct(r.effRateBi):'—'):null, biCol?(r.effRateBiXtra!=null?fmtPct(r.effRateBiXtra):'—'):null],
                       ].map(([label, std, extra, bi, biX]) => (
                         <tr key={label}>
                           <td>{label}</td>
