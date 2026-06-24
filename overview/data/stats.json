@@ -7,9 +7,9 @@
     "frontend_files": 2202
   },
   "repo": {
-    "total_commits": 7290,
+    "total_commits": 7292,
     "first_commit_date": "2025-11-07",
-    "latest_commit_date": "2026-06-23"
+    "latest_commit_date": "2026-06-24"
   },
   "architecture": {
     "api_routes": 3934,
@@ -22,9 +22,9 @@
     "data_models": 723
   },
   "velocity": {
-    "commits_last_7d": 163,
-    "commits_last_30d": 519
+    "commits_last_7d": 165,
+    "commits_last_30d": 450
   },
-  "generated_at": "2026-06-23T12:15:20Z",
-  "commit_sha": "716756e70"
+  "generated_at": "2026-06-24T20:47:01Z",
+  "commit_sha": "5c4c06029"
 }
