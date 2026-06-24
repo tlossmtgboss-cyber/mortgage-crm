@@ -225,6 +225,7 @@ const ProfitabilityDashboard = lazyRetry(() => import('../pages/ProfitabilityDas
 const UsageIntelligenceDashboard = lazyRetry(() => import('../pages/UsageIntelligenceDashboard'));
 const ScenarioModeling = lazyRetry(() => import('../pages/ScenarioModeling'));
 const MortgageCalculator = lazyRetry(() => import('../pages/MortgageCalculator'));
+const AdditionalPaymentAnalysis = lazyRetry(() => import('../pages/AdditionalPaymentAnalysis'));
 const AllInOneLoan = lazyRetry(() => import('../pages/AllInOneLoan'));
 const PipelineProbability = lazyRetry(() => import('../pages/PipelineProbability'));
 const SLASettings = lazyRetry(() => import('../pages/SLASettings'));
@@ -523,6 +524,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/mortgage-planner" path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />,
     <Route key="/questionnaire" path="/questionnaire" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />,
     <Route key="/mortgage-calculator" path="/mortgage-calculator" element={<LazyPage><MortgageCalculator /></LazyPage>} />,
+    <Route key="/additional-payment-analysis" path="/additional-payment-analysis" element={<LazyPage><AdditionalPaymentAnalysis /></LazyPage>} />,
     <Route key="/estimate-comparison" path="/estimate-comparison" element={<LazyPage><EstimateComparison /></LazyPage>} />,
     <Route key="/privacy-policy" path="/privacy-policy" element={<LazyPage><PrivacyPolicy /></LazyPage>} />,
     <Route key="/terms-of-service" path="/terms-of-service" element={<LazyPage><TermsOfService /></LazyPage>} />,
