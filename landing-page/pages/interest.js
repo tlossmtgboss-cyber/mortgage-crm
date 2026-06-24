@@ -29,35 +29,22 @@ function amortize(principal, annRate, totalMo, extraMo = 0) {
   return { pmt, totInt, months: mo, sched };
 }
 
-function irr(cfs, g = 0.005) {
-  let r = g;
-  for (let i = 0; i < 300; i++) {
-    let f = 0, df = 0;
-    for (let t = 0; t < cfs.length; t++) {
-      const d = Math.pow(1 + r, t);
-      f += cfs[t] / d;
-      df -= t * cfs[t] / Math.pow(1 + r, t + 1);
-    }
-    if (Math.abs(df) < 1e-15) break;
-    const nr = r - f / df;
-    if (Math.abs(nr - r) < 1e-9) return nr;
-    r = nr;
+function equivalentRate(pv, termMo, targetTotInt) {
+  const targetPmt = (targetTotInt + pv) / termMo;
+  const calcPmt = r => {
+    const mr = r / 12;
+    if (mr < 1e-9) return pv / termMo;
+    return pv * mr * Math.pow(1 + mr, termMo) / (Math.pow(1 + mr, termMo) - 1);
+  };
+  let lo = 0.0001, hi = 0.9999;
+  if (calcPmt(lo) >= targetPmt) return lo * 100;
+  if (calcPmt(hi) <= targetPmt) return hi * 100;
+  for (let i = 0; i < 100; i++) {
+    const mid = (lo + hi) / 2;
+    if (calcPmt(mid) > targetPmt) hi = mid;
+    else lo = mid;
   }
-  return r;
-}
-
-function effectiveRate(extra, baseRes, extraRes) {
-  if (extra <= 0) return null;
-  const saved = baseRes.totInt - extraRes.totInt;
-  if (saved <= 0) return null;
-  const n = extraRes.months;
-  const cfs = Array(n).fill(-extra);
-  cfs[n - 1] += saved;
-  try {
-    const mr = irr(cfs);
-    if (!isFinite(mr) || isNaN(mr) || mr < 0) return null;
-    return mr * 12 * 100;
-  } catch { return null; }
+  return ((lo + hi) / 2) * 100;
 }
 
 function currentBalance(loanAmt, annRate, totalMo, paysMade) {
@@ -135,9 +122,9 @@ export default function InterestPage() {
     const biwk = doBi ? amortize(curBal, rate, remMo, base.pmt / 2) : null;
     const biwkXtra = doBi ? amortize(curBal, rate, remMo, base.pmt / 2 + extra) : null;
 
-    const effRate = effectiveRate(extra, base, xtra);
-    const effRateBi = biwk ? effectiveRate(base.pmt / 2, base, biwk) : null;
-    const effRateBiXtra = biwkXtra ? effectiveRate(base.pmt / 2 + extra, base, biwkXtra) : null;
+    const effRate = equivalentRate(curBal, remMo, xtra.totInt);
+    const effRateBi = biwk ? equivalentRate(curBal, remMo, biwk.totInt) : null;
+    const effRateBiXtra = biwkXtra ? equivalentRate(curBal, remMo, biwkXtra.totInt) : null;
 
     setResult({ loanAmt, rate, termYrs, paysMade, extra, escrow, doBi, curBal, remMo, base, xtra, biwk, biwkXtra, effRate, effRateBi, effRateBiXtra });
     setAmortOpen(false);
@@ -383,8 +370,8 @@ table.amort tfoot td:first-child{text-align:left}
               <div className="eff">
                 <div>
                   <div className="el">Key insight</div>
-                  <div className="et">Equivalent interest rate earned by overpaying</div>
-                  <div className="ed">Every extra dollar paid saves interest at this annualized rate — a guaranteed, risk-free return with no market exposure.</div>
+                  <div className="et">Effective interest rate with extra payments</div>
+                  <div className="ed">Making extra payments lowers your effective interest rate. This is the rate a standard loan would need to match your total interest cost.</div>
                 </div>
                 <div className="ern">
                   <div className="elnl">Eff. rate</div>
@@ -423,7 +410,7 @@ table.amort tfoot td:first-child{text-align:left}
                 <div className="mg">
                   <div className="mc pos"><div className="ml">Interest saved</div><div className="mv">{fmtD(saved)}</div><div className="ms">vs. standard schedule</div></div>
                   <div className="mc pos"><div className="ml">Months eliminated</div><div className="mv">{fmt(moElim)}</div><div className="ms">{fmtYr(moElim)} off your loan</div></div>
-                  <div className="mc gold"><div className="ml">Equiv. interest rate</div><div className="mv">{r.effRate != null ? r.effRate.toFixed(2)+'%' : '—'}</div><div className="ms">Guaranteed annual return</div></div>
+                  <div className="mc gold"><div className="ml">Effective interest rate</div><div className="mv">{r.effRate != null ? r.effRate.toFixed(2)+'%' : '—'}</div><div className="ms">vs. {r.rate}% note rate</div></div>
                   <div className="mc base"><div className="ml">New payoff</div><div className="mv">{fmtYr(r.xtra.months)}</div><div className="ms">vs. {fmtYr(r.base.months)} standard</div></div>
                   <div className="mc base"><div className="ml">Equity after 5 yrs</div><div className="mv">{fmtD(eq5)}</div><div className="ms">vs. {fmtD(eq5b)} standard</div></div>
                   <div className="mc base"><div className="ml">Equity after 10 yrs</div><div className="mv">{fmtD(eq10)}</div><div className="ms">vs. {fmtD(eq10b)} standard</div></div>
