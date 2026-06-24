@@ -119,8 +119,8 @@ export default function InterestPage() {
 
     const base = amortize(curBal, rate, remMo, 0);
     const xtra = amortize(curBal, rate, remMo, extra);
-    const biwk = doBi ? amortize(curBal, rate, remMo, base.pmt / 2) : null;
-    const biwkXtra = doBi ? amortize(curBal, rate, remMo, base.pmt / 2 + extra) : null;
+    const biwk = doBi ? amortize(curBal, rate, remMo, base.pmt / 12) : null;
+    const biwkXtra = doBi ? amortize(curBal, rate, remMo, base.pmt / 12 + extra) : null;
 
     const effRate = equivalentRate(curBal, remMo, xtra.totInt);
     const effRateBi = biwk ? equivalentRate(curBal, remMo, biwk.totInt) : null;
@@ -430,9 +430,9 @@ table.amort tfoot td:first-child{text-align:left}
                     </tr></thead>
                     <tbody>
                       {[
-                        ['Regular P&I payment', fmtD(r.base.pmt), fmtD(r.base.pmt+r.extra), biCol?fmtD(r.base.pmt/2)+' /2wk':null, biCol?fmtD(r.base.pmt/2+r.extra):null],
+                        ['Regular P&I payment', fmtD(r.base.pmt), fmtD(r.base.pmt+r.extra), biCol?fmtD(r.base.pmt/2)+' /2wk':null, biCol?fmtD(r.base.pmt/2)+' /2wk':null],
                         ['Total with escrow', fmtD(r.base.pmt+r.escrow), fmtD(r.base.pmt+r.extra+r.escrow), null, biCol?fmtD(r.base.pmt/2+r.extra+r.escrow)+' /2wk':null],
-                        ['Extra monthly amount', '—', fmtD(r.extra), fmtD(r.base.pmt/2)+' /2wk', biCol?fmtD(r.base.pmt/2+r.extra):null],
+                        ['Extra monthly amount', '—', fmtD(r.extra), fmtD(r.base.pmt/12)+'/mo equiv', biCol?fmtD(r.base.pmt/12+r.extra):null],
                         ['Months to pay off', fmt(r.base.months), fmt(r.xtra.months), biCol?fmt(r.biwk.months):null, biCol?fmt(r.biwkXtra.months):null],
                         ['Years to pay off', (r.base.months/12).toFixed(1)+' yr', (r.xtra.months/12).toFixed(1)+' yr', biCol?(r.biwk.months/12).toFixed(1)+' yr':null, biCol?(r.biwkXtra.months/12).toFixed(1)+' yr':null],
                         ['Months saved', '—', fmt(r.base.months-r.xtra.months), biCol?fmt(r.base.months-r.biwk.months):null, biCol?fmt(r.base.months-r.biwkXtra.months):null],
