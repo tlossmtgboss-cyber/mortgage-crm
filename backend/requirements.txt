@@ -65,7 +65,7 @@ sendgrid>=6.0.0
 telnyx>=2.0.0
 
 # Background Tasks
-redis>=5.0.0
+redis>=7.4.0
 apscheduler>=3.10.0
 
 # Data Processing
