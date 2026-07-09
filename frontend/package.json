@@ -26,7 +26,7 @@
     "@emotion/styled": "^11.14.1",
     "@livekit/components-react": "^2.9.20",
     "@livekit/components-styles": "^1.2.0",
-    "@mui/icons-material": "^7.3.5",
+    "@mui/icons-material": "^9.0.0",
     "@mui/material": "^7.3.5",
     "@stripe/react-stripe-js": "^2.4.0",
     "@stripe/stripe-js": "^2.3.0",
