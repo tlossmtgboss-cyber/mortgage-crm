@@ -120,7 +120,7 @@ signxml>=3.0.0  # XML Signature verification for SAML SSO assertions
 
 # Google Auth
 google-auth>=2.23.0
-google-auth-oauthlib>=1.1.0
+google-auth-oauthlib>=1.3.1
 google-api-python-client>=2.100.0
 google-cloud-texttospeech>=2.17.2
 pdf2image>=1.16.0
