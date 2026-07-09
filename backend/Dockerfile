@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Build cache buster - change this value to force full rebuild
 ARG CACHE_DATE=2026-05-13-pool-exhaustion-fix
